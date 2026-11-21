@@ -73,7 +73,10 @@ impl Provider {
 fn get(conn: &Connection, key: &str) -> AppResult<Option<Value>> {
     let raw: Option<String> = conn
         .query_row(
-            "SELECT value_json FROM settings WHERE key = ?1",
+            &format!(
+                "SELECT value_json FROM {} WHERE key = ?1",
+                crate::db::settings_table(key)
+            ),
             [key],
             |r| r.get(0),
         )
@@ -83,8 +86,11 @@ fn get(conn: &Connection, key: &str) -> AppResult<Option<Value>> {
 
 fn set(conn: &Connection, key: &str, value: &Value) -> AppResult<()> {
     conn.execute(
-        "INSERT INTO settings (key, value_json, updated_at) VALUES (?1, ?2, ?3)
-         ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at",
+        &format!(
+            "INSERT INTO {} (key, value_json, updated_at) VALUES (?1, ?2, ?3)
+             ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at",
+            crate::db::settings_table(key)
+        ),
         params![key, value.to_string(), now_ms()],
     )?;
     Ok(())

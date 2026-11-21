@@ -304,3 +304,10 @@ type SettingsPatch = Partial<Settings>;
 - 設定 > その他のバックアップ機能のため、`backup_estimate` / `backup_export` / `backup_inspect` / `backup_orphans` / `backup_restore` / `backup_cancel` / `backup_restart` とイベント `backup:progress` を追加する。型は `BackupInclude = { settings, gallery, presets }`(いずれも boolean)。パスはフロントから渡さず、Rust 側のダイアログで得る。
 - エラーコード: `BACKUP_UNSUPPORTED`(形式・バージョン不正)、`BACKUP_CORRUPT`(ZIP・DB の破損)、`BACKUP_BUSY`(ジョブ実行中)、`BACKUP_NO_SPACE`(書き込み失敗: 容量不足)、`BACKUP_PATH_INVALID`(保存先がアプリのデータ領域内)。
 - 詳細は [35-backup.md](35-backup.md) §5・§6。
+
+## 追記(v0.31・承認済み・実装済み): ユーザー機能
+
+- `user_list` / `user_current` / `user_create` / `user_login` / `user_logout` / `user_rename` / `user_delete` / `user_lock_set` / `user_lock_clear`(ユーザー系は未ログインでも呼べる)。データ系コマンドは、ログイン中のユーザーのデータだけを扱う(未ログインは `NOT_LOGGED_IN`)。フロントはユーザー ID をデータ系コマンドに渡さない。
+- エラーコード: `NOT_LOGGED_IN`・`AUTH_FAILED`・`AUTH_LOCKED_OUT`(`details.retryAfterMs`)・`USER_NAME_TAKEN`・`USER_LIMIT`・`USER_LAST`・`USER_BUSY`。
+- `user_delete` は `{ externalImagesDir: string | null }` を返す(作業スペースの外にあった画像保存先。自動では削除しない)。
+- 詳細は [36-users.md](36-users.md) §9・§10。

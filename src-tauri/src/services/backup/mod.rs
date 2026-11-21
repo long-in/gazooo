@@ -596,7 +596,7 @@ mod tests {
         let data = root.join("data");
         fs::create_dir_all(&data).unwrap();
         let db = Db::open_in_memory().unwrap();
-        let paths = AppPaths { data_dir: data };
+        let paths = AppPaths::new(data);
         let images = paths.default_images_dir();
         let svc = BackupService::new(
             db.clone(),

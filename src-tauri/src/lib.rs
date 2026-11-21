@@ -28,14 +28,49 @@ use crate::services::settings::Settings;
 use crate::services::storage::StorageService;
 
 /// アプリが使うディレクトリ(docs/06-cross-platform.md §1)。
+///
+/// `user_dir` はログイン中のユーザーの作業スペース(`{data_dir}/users/<id>`。docs/36 §2.1)。
+/// `Clone` で共有され、ログイン・ログアウトは全サービスに反映される。
 #[derive(Clone)]
 pub struct AppPaths {
     pub data_dir: PathBuf,
+    user_dir: Arc<std::sync::RwLock<Option<PathBuf>>>,
 }
 
 impl AppPaths {
+    pub fn new(data_dir: PathBuf) -> Self {
+        Self {
+            data_dir,
+            user_dir: Arc::new(std::sync::RwLock::new(None)),
+        }
+    }
+
+    /// ユーザーの作業スペースの置き場所(`{data_dir}/users`)。
+    pub fn users_root(&self) -> PathBuf {
+        self.data_dir.join("users")
+    }
+
+    pub fn user_workspace(&self, user_id: &str) -> PathBuf {
+        self.users_root().join(user_id)
+    }
+
+    pub fn set_user_dir(&self, dir: Option<PathBuf>) {
+        if let Ok(mut g) = self.user_dir.write() {
+            *g = dir;
+        }
+    }
+
+    /// ログイン中のユーザーの作業スペース。未ログインは `None`。
+    pub fn current_user_dir(&self) -> Option<PathBuf> {
+        self.user_dir.read().ok().and_then(|g| g.clone())
+    }
+
+    /// 既定の画像保存先。ログイン中は `users/<id>/images`、テストなど未ログインは `{data_dir}/images`。
     pub fn default_images_dir(&self) -> PathBuf {
-        self.data_dir.join("images")
+        match self.current_user_dir() {
+            Some(d) => d.join("images"),
+            None => self.data_dir.join("images"),
+        }
     }
 
     pub fn resolve_images_dir(&self, settings: &Settings) -> PathBuf {
@@ -65,29 +100,29 @@ pub fn run() {
             let (debug_log, guard) = services::debug_log::DebugLog::init(&log_dir)?;
             app.manage(LogGuard(guard));
 
-            let db = Db::open(&data_dir.join("gazooo.db"))?;
-            let paths = AppPaths { data_dir };
+            // 端末共通の DB(ユーザー一覧・端末の設定)。ユーザーの DB はログイン時に開く(docs/36)
+            let app_db = data_dir.join("app.db");
+            let db = Db::new(&app_db)?;
+            let paths = AppPaths::new(data_dir);
+            let users = services::users::UserService::new(&app_db, db.clone(), paths.clone())?;
+            app.manage(Arc::clone(&users));
 
-            // 画像保存先を asset プロトコルのスコープに許可する(それ以外は読めない)
-            let settings =
-                tauri::async_runtime::block_on(db.call(|c| services::settings::load(c)))?;
-            let images_dir = paths.resolve_images_dir(&settings);
-            std::fs::create_dir_all(&images_dir)?;
-            app.asset_protocol_scope()
-                .allow_directory(&images_dir, true)?;
+            let comfyui_url = tauri::async_runtime::block_on(
+                db.call_device(|c| services::settings::get_comfyui_url(c)),
+            )?;
 
             // デバッグログの ON/OFF を復元し、ON の間は合計サイズを定期的に整理する(docs/31)
             if tauri::async_runtime::block_on(
-                db.call(|c| services::settings::get_debug_enabled(c)),
+                db.call_device(|c| services::settings::get_debug_enabled(c)),
             )? {
                 debug_log.set_enabled(true);
                 let managed = tauri::async_runtime::block_on(
-                    db.call(|c| services::settings::get_managed_engine(c)),
+                    db.call_device(|c| services::settings::get_managed_engine(c)),
                 )?
                 .enabled;
                 debug_log.log_environment(&services::debug_log::describe_environment(
                     &app.package_info().version.to_string(),
-                    &settings.comfyui_url,
+                    &comfyui_url,
                     managed,
                     true,
                 ));
@@ -95,7 +130,7 @@ pub fn run() {
             tauri::async_runtime::spawn(Arc::clone(&debug_log).run_pruner());
             app.manage(debug_log);
 
-            let engine = Arc::new(EngineService::new(&settings.comfyui_url)?);
+            let engine = Arc::new(EngineService::new(&comfyui_url)?);
             let jobs = JobService::new(
                 db.clone(),
                 Arc::clone(&engine),
@@ -168,14 +203,6 @@ pub fn run() {
                 Arc::clone(&images),
             ));
             app.manage(Arc::clone(&images));
-            // サムネイル未生成の画像(以前に保存したもの)を裏で補完する
-            tauri::async_runtime::spawn(async move {
-                match images.backfill_thumbnails().await {
-                    Ok(0) => {}
-                    Ok(n) => tracing::info!(count = n, "thumbnails backfilled"),
-                    Err(e) => tracing::warn!(error = %e, "thumbnail backfill failed"),
-                }
-            });
             // ComfyUI の起動管理(docs/15)。アプリが起動した子プロセスだけを管理し、終了時に停止する
             let engine_proc = EngineProcess::new(
                 Arc::new(TauriSink(app.handle().clone())),
@@ -191,7 +218,10 @@ pub fn run() {
             {
                 let db = db.clone();
                 tauri::async_runtime::spawn(async move {
-                    match db.call(|c| services::settings::get_managed_engine(c)).await {
+                    match db
+                        .call_device(|c| services::settings::get_managed_engine(c))
+                        .await
+                    {
                         Ok(cfg) if cfg.enabled && cfg.auto_start => {
                             if let Err(e) = engine_proc.start(&cfg).await {
                                 tracing::warn!(error = %e, "comfyui auto start failed");
@@ -203,11 +233,8 @@ pub fn run() {
                 });
             }
             tauri::async_runtime::spawn(services::engine::monitor(app.handle().clone()));
-            // 前回の実行中ジョブを復旧(失敗扱い)してから、待機中ジョブの実行を再開する
+            // ジョブのワーカー。ログインするまでは待機する。前回の実行中ジョブの復旧は、ログイン時に行う(docs/36)
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = jobs.recover().await {
-                    tracing::error!(error = %e, "job recovery failed");
-                }
                 jobs.run_worker().await;
             });
 
@@ -217,6 +244,15 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::user::user_list,
+            commands::user::user_current,
+            commands::user::user_create,
+            commands::user::user_login,
+            commands::user::user_logout,
+            commands::user::user_rename,
+            commands::user::user_delete,
+            commands::user::user_lock_set,
+            commands::user::user_lock_clear,
             commands::settings::settings_get,
             commands::settings::settings_update,
             commands::debug::debug_status,

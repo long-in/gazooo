@@ -46,6 +46,15 @@ pub enum AppError {
     /// バックアップ(docs/35)。`code` は `BACKUP_*`。
     #[error("{message}")]
     Backup { code: &'static str, message: String },
+    /// ユーザー機能(docs/36)。`code` は `AUTH_*` / `USER_*`。`details` に `retryAfterMs` などを入れる。
+    #[error("{message}")]
+    User {
+        code: &'static str,
+        message: String,
+        details: Option<serde_json::Value>,
+    },
+    #[error("ログインしていません")]
+    NotLoggedIn,
     #[error("database error: {0}")]
     Db(String),
     #[error("storage error: {0}")]
@@ -104,6 +113,26 @@ impl AppError {
         }
     }
 
+    pub fn user(code: &'static str, message: impl Into<String>) -> Self {
+        Self::User {
+            code,
+            message: message.into(),
+            details: None,
+        }
+    }
+
+    pub fn user_with(
+        code: &'static str,
+        message: impl Into<String>,
+        details: serde_json::Value,
+    ) -> Self {
+        Self::User {
+            code,
+            message: message.into(),
+            details: Some(details),
+        }
+    }
+
     pub fn internal(message: impl Into<String>) -> Self {
         Self::Internal(message.into())
     }
@@ -125,6 +154,8 @@ impl AppError {
             Self::Models { code, .. } => code,
             Self::EngineProc { code, .. } => code,
             Self::Backup { code, .. } => code,
+            Self::User { code, .. } => code,
+            Self::NotLoggedIn => "NOT_LOGGED_IN",
             Self::Db(_) => "DB_ERROR",
             Self::Storage(_) => "STORAGE_ERROR",
             Self::Internal(_) => "INTERNAL",
@@ -136,7 +167,9 @@ impl Serialize for AppError {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let details = match self {
             Self::Validation { field, .. } => Some(json!({ "field": field })),
-            Self::Models { details, .. } | Self::EngineProc { details, .. } => details.clone(),
+            Self::Models { details, .. }
+            | Self::EngineProc { details, .. }
+            | Self::User { details, .. } => details.clone(),
             _ => None,
         };
         json!({

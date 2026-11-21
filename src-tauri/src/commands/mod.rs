@@ -13,3 +13,4 @@ pub mod presets;
 pub mod settings;
 pub mod storage;
 pub mod translate_mt;
+pub mod user;

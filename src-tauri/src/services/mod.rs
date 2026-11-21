@@ -14,3 +14,4 @@ pub mod presets;
 pub mod settings;
 pub mod storage;
 pub mod thumbs;
+pub mod users;

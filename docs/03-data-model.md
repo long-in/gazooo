@@ -209,3 +209,9 @@ CREATE INDEX idx_assistant_msg_conv ON assistant_messages(conversation_id, creat
 ### デバッグログの設定(v0.24、設計: 31 §2。承認済み・実装済み)
 
 `settings` に `debug.enabled`(boolean、既定 false)を追加する。スキーマ変更・マイグレーションはなし。`settings_update` では変更できず、`debug_set_enabled` で行う。
+
+## 追記(v0.31・承認済み・実装済み): ユーザー機能(設計: 36)
+
+- **DB の分割**: `{app_data_dir}/app.db`(端末共通: `users`・`device_settings`)と、ユーザーごとの `{app_data_dir}/users/<user_id>/gazooo.db`(本資料のテーブル一式。スキーマ・マイグレーションは従来どおり)。画像の既定の保存先は `users/<user_id>/images`。
+- **設定キーの分類**(`settings_get` / `settings_update` の API は変えず、Rust 側のキー分類表で振り分ける): 端末共通 = `engine.comfyui.url`・`engine.comfyui.managed`・`engine.comfyui.models_dir`・`debug.enabled`・`llm.*`(`app.db` の `device_settings`)。それ以外はすべてユーザーごと(`settings`)。分類にないキーはユーザーごと。
+- 従来の `gazooo.db` は初回起動時に最初のユーザー「ユーザー 1」へ引き継ぐ(`gazooo.db.pre-users` として残す。画像は移動せず `storage.images_dir` を旧位置に固定)。詳細は [36-users.md](36-users.md) §3・§4・§8。

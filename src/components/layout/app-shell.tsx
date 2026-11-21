@@ -12,6 +12,8 @@ import { useT } from "@/lib/i18n/use-t";
 import { detectMac, modifierLabel } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
+import { UserMenu } from "@/components/users/user-menu";
+
 import { StatusBar } from "./status-bar";
 import { useGlobalShortcuts } from "./use-global-shortcuts";
 
@@ -51,6 +53,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex h-screen flex-col bg-background">
       <div className="flex min-h-0 flex-1">
         <nav aria-label="Main" className="flex w-12 shrink-0 flex-col items-center gap-1 border-r bg-sidebar py-2 text-sidebar-foreground">
+          <UserMenu />
+          <div aria-hidden className="my-1 h-px w-6 bg-border" />
           {NAV_ITEMS.map(({ href, labelKey, icon: Icon }, index) => {
             const active = isActive(pathname, href);
             return (

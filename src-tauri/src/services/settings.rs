@@ -87,7 +87,10 @@ where
 fn get_raw(conn: &Connection, key: &str) -> AppResult<Option<serde_json::Value>> {
     let raw: Option<String> = conn
         .query_row(
-            "SELECT value_json FROM settings WHERE key = ?1",
+            &format!(
+                "SELECT value_json FROM {} WHERE key = ?1",
+                crate::db::settings_table(key)
+            ),
             [key],
             |r| r.get(0),
         )
@@ -101,21 +104,35 @@ fn get_raw(conn: &Connection, key: &str) -> AppResult<Option<serde_json::Value>>
 
 fn set_raw(conn: &Connection, key: &str, value: &serde_json::Value) -> AppResult<()> {
     conn.execute(
-        "INSERT INTO settings (key, value_json, updated_at) VALUES (?1, ?2, ?3)
-         ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at",
+        &format!(
+            "INSERT INTO {} (key, value_json, updated_at) VALUES (?1, ?2, ?3)
+             ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at",
+            crate::db::settings_table(key)
+        ),
         params![key, value.to_string(), now_ms()],
     )?;
     Ok(())
 }
 
 fn delete_raw(conn: &Connection, key: &str) -> AppResult<()> {
-    conn.execute("DELETE FROM settings WHERE key = ?1", [key])?;
+    conn.execute(
+        &format!(
+            "DELETE FROM {} WHERE key = ?1",
+            crate::db::settings_table(key)
+        ),
+        [key],
+    )?;
     Ok(())
 }
 
 fn parse<T: serde::de::DeserializeOwned>(v: Option<serde_json::Value>) -> Option<T> {
     // 壊れた値は既定値扱い(起動不能にしない)
     v.and_then(|v| serde_json::from_value(v).ok())
+}
+
+/// ComfyUI の接続先(端末共通の設定。未ログインでも読める)。
+pub fn get_comfyui_url(conn: &Connection) -> AppResult<String> {
+    Ok(parse(get_raw(conn, KEY_COMFYUI_URL)?).unwrap_or_else(|| DEFAULT_COMFYUI_URL.to_string()))
 }
 
 pub fn load(conn: &Connection) -> AppResult<Settings> {

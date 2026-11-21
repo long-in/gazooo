@@ -467,7 +467,7 @@ impl LlmService {
     }
 
     async fn settings(&self) -> AppResult<LlmSettings> {
-        self.db.call(|c| store::llm_settings(c)).await
+        self.db.call_device(|c| store::llm_settings(c)).await
     }
 
     pub async fn status(&self) -> AppResult<LlmStatus> {
@@ -530,7 +530,9 @@ impl LlmService {
         release_before_generation: Option<bool>,
     ) -> AppResult<LlmStatus> {
         self.db
-            .call(move |c| store::set_llm_settings(c, idle_minutes, release_before_generation))
+            .call_device(move |c| {
+                store::set_llm_settings(c, idle_minutes, release_before_generation)
+            })
             .await?;
         // 自動停止の時間を短くしたときに、すぐ反映されるようにする
         self.status().await
