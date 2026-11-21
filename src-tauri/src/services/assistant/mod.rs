@@ -415,6 +415,20 @@ impl AssistantService {
             .await
     }
 
+    /// 相談・翻訳の実行中の処理をすべて中止する(ログアウトの前処理。docs/36 §6)。
+    pub fn cancel_all(&self) {
+        if let Ok(g) = self.running.lock()
+            && let Some(r) = g.as_ref()
+        {
+            let _ = r.cancel.send(true);
+        }
+        if let Ok(g) = self.translating.lock()
+            && let Some(r) = g.as_ref()
+        {
+            let _ = r.cancel.send(true);
+        }
+    }
+
     pub fn cancel(&self, request_id: &str) {
         if let Ok(g) = self.running.lock()
             && let Some(r) = g.as_ref()

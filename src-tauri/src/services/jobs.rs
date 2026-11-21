@@ -283,6 +283,37 @@ impl JobService {
         self.db.call(move |c| repo::remove_finished(c, &ids)).await
     }
 
+    /// 実行中のジョブがあるか(ユーザーの切り替えの確認に使う。docs/36 §5.4)。
+    pub fn has_running(&self) -> bool {
+        self.active.lock().map(|a| a.is_some()).unwrap_or(false)
+    }
+
+    /// ワーカーを起こす(ログイン直後に、そのユーザーの待機中ジョブを始めるため)。
+    pub fn wake_worker(&self) {
+        self.wake.notify_one();
+    }
+
+    /// 実行中のジョブを取り消し、終わるまで待つ(ログアウトの前処理。最大 30 秒)。
+    /// ジョブはユーザーの DB に結果を書くため、DB を手放す前に必ず終わらせる。
+    pub async fn stop_running(&self) -> AppResult<()> {
+        if let Ok(active) = self.active.lock()
+            && let Some(a) = active.as_ref()
+        {
+            a.cancel.notify_one();
+        }
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+        while self.has_running() {
+            if tokio::time::Instant::now() >= deadline {
+                return Err(AppError::user(
+                    "USER_BUSY",
+                    "実行中のジョブを終了できませんでした。しばらくしてからやり直してください",
+                ));
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        Ok(())
+    }
+
     pub fn is_paused(&self) -> bool {
         self.paused.load(Ordering::SeqCst)
     }
@@ -306,6 +337,12 @@ impl JobService {
     /// 待機中ジョブを順に実行し続ける(アプリの寿命と同じ)。
     pub async fn run_worker(self: Arc<Self>) {
         loop {
+            // ログインしていない間は動かさない(待機中ジョブは、そのユーザーのログインまで実行しない。docs/36 §5.4)
+            if !self.db.is_attached() {
+                let _ =
+                    tokio::time::timeout(Duration::from_millis(500), self.wake.notified()).await;
+                continue;
+            }
             if self.is_paused() {
                 self.wake.notified().await;
                 continue;
@@ -792,9 +829,7 @@ mod tests {
             Db::open_in_memory().unwrap(),
             Arc::new(EngineService::from_engine(engine.clone())),
             events.clone(),
-            AppPaths {
-                data_dir: dir.clone(),
-            },
+            AppPaths::new(dir.clone()),
         );
         Harness {
             svc,
@@ -1303,9 +1338,7 @@ mod tests {
             Db::open_in_memory().unwrap(),
             Arc::new(EngineService::new(&url).unwrap()),
             events.clone(),
-            AppPaths {
-                data_dir: dir.clone(),
-            },
+            AppPaths::new(dir.clone()),
         );
         tokio::spawn(svc.clone().run_worker());
         RealHarness { svc, events, dir }

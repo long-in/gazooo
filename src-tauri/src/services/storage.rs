@@ -271,9 +271,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("gazooo-storage-{}", uuid::Uuid::now_v7()));
         let db = Db::open_in_memory().unwrap();
         let trash = Arc::new(FakeTrash::default());
-        let paths = AppPaths {
-            data_dir: dir.clone(),
-        };
+        let paths = AppPaths::new(dir.clone());
         let old_root = paths.default_images_dir();
         let svc = StorageService::new(db.clone(), paths, trash.clone());
         Harness {

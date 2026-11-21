@@ -330,9 +330,7 @@ mod tests {
             ..Default::default()
         });
         let events = Arc::new(Recorder::default());
-        let paths = AppPaths {
-            data_dir: dir.clone(),
-        };
+        let paths = AppPaths::new(dir.clone());
         let root = dir.join("images");
         let svc = ImageService::new(db.clone(), events.clone(), paths, trash.clone());
         Harness {

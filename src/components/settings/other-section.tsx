@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { BackupSection } from "@/components/settings/backup-section";
+import { LockSection } from "@/components/settings/lock-section";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
@@ -38,6 +39,7 @@ export function OtherSection() {
 
   return (
     <div className="flex flex-col gap-8">
+      <LockSection />
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-medium">{t("settings.debug.title")}</h2>
 

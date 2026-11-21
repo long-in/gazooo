@@ -4,6 +4,7 @@ import { ThemeProvider, useTheme } from "next-themes";
 import { type ReactNode, useEffect } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
+import { UserGate } from "@/components/users/user-gate";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useLanguage } from "@/lib/i18n/use-t";
 import {
@@ -43,6 +44,7 @@ import { useJobStore } from "@/stores/job-store";
 import { useModelsStore } from "@/stores/models-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useUiStore } from "@/stores/ui-store";
+import { useUserStore } from "@/stores/user-store";
 
 /** DB 上の設定(正)をテーマ・言語・lang 属性へ反映する。 */
 function SettingsBootstrap() {
@@ -292,21 +294,41 @@ function ModelsBootstrap() {
   return null;
 }
 
+/**
+ * ログインするまでは、ユーザーの選択画面だけを出し、データを読む処理は一切始めない(docs/36 §5.1)。
+ * ユーザーを切り替えるときはウィンドウをリロードするため、各ストアは毎回まっさらな状態で始まる。
+ */
+function UserBoundary({ children }: { children: ReactNode }) {
+  const phase = useUserStore((s) => s.phase);
+
+  useEffect(() => {
+    void useUserStore.getState().init();
+  }, []);
+
+  if (phase === "loading") return null;
+  if (phase === "gate") return <UserGate />;
+  return (
+    <>
+      <SettingsBootstrap />
+      <EngineBootstrap />
+      <JobBootstrap />
+      <PresetBootstrap />
+      <AssistantBootstrap />
+      <LlmBootstrap />
+      <DebugBootstrap />
+      <ModelsBootstrap />
+      <EngineProcessBootstrap />
+      <EngineInstallBootstrap />
+      {children}
+    </>
+  );
+}
+
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
       <TooltipProvider>
-        <SettingsBootstrap />
-        <EngineBootstrap />
-        <JobBootstrap />
-        <PresetBootstrap />
-        <AssistantBootstrap />
-        <LlmBootstrap />
-        <DebugBootstrap />
-        <ModelsBootstrap />
-        <EngineProcessBootstrap />
-        <EngineInstallBootstrap />
-        {children}
+        <UserBoundary>{children}</UserBoundary>
         <Toaster richColors />
       </TooltipProvider>
     </ThemeProvider>
