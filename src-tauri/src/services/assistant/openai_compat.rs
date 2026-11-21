@@ -446,6 +446,7 @@ mod tests {
                 match e {
                     StreamEvent::Text(t) => text.push_str(&t),
                     StreamEvent::ToolUse { name, input } => tools.push((name, input)),
+                    StreamEvent::Stop(_) => {}
                 }
             }
         };

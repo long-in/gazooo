@@ -118,7 +118,11 @@ export function TranslateBox({ params }: { params: GenerationParams }) {
         },
       });
     } catch (e) {
-      toast.error(errorMessage(toAppError(e)));
+      const err = toAppError(e);
+      // API エラーは、原因(HTTP ステータス・リクエスト ID。本文は含まない)も併せて出す
+      const detail =
+        err.code === "ASSISTANT_API_ERROR" ? `(${err.message})` : "";
+      toast.error(errorMessage(err) + detail);
       void useTranslateStore.getState().loadStatus();
     } finally {
       if (mounted.current) setRequestId(null);

@@ -451,6 +451,7 @@ impl AssistantService {
                     answer.push_str(&t);
                     sink.delta(&rid, &t);
                 }
+                StreamEvent::Stop(_) => {}
                 StreamEvent::ToolUse { name, input } => {
                     // 回答 1 回につき、設定の提案とモデルの提案をそれぞれ 1 件まで
                     let has_params = suggestions.iter().any(|s| s.model.is_none());
@@ -659,7 +660,7 @@ impl AssistantService {
             *g = None;
         }
         if let Err(e) = &result {
-            tracing::warn!(code = e.code(), "prompt translate failed");
+            tracing::warn!(code = e.code(), detail = %e, "prompt translate failed");
         }
         result
     }
@@ -682,6 +683,7 @@ impl AssistantService {
         let user = translate::user_message(capabilities::catalog(), target, text);
         let messages = vec![("user".to_string(), user)];
         let mut out = String::new();
+        let mut stop: Option<String> = None;
         let end = self
             .dispatch(
                 &dest,
@@ -689,10 +691,10 @@ impl AssistantService {
                 &messages,
                 serde_json::json!([]),
                 cancel_rx,
-                |ev| {
-                    if let StreamEvent::Text(t) = ev {
-                        out.push_str(&t);
-                    }
+                |ev| match ev {
+                    StreamEvent::Text(t) => out.push_str(&t),
+                    StreamEvent::Stop(r) => stop = Some(r),
+                    StreamEvent::ToolUse { .. } => {}
                 },
             )
             .await?;
@@ -700,11 +702,23 @@ impl AssistantService {
             return Ok(None);
         }
         let cleaned = translate::clean_output(&out);
-        if cleaned.is_empty() {
+        if cleaned.contains(translate::REFUSED_MARK) {
             return Err(AppError::assistant(
                 "ASSISTANT_API_ERROR",
-                "翻訳結果が空でした。入力を変えて、もう一度試してください",
+                "この内容は翻訳できません(未成年や実在の人物を性的に描く内容は扱えません)。入力を見直してください",
             ));
+        }
+        if cleaned.is_empty() {
+            let reason = stop.as_deref().unwrap_or("不明");
+            tracing::warn!(stop_reason = reason, "prompt translate returned no text");
+            let message = if reason == "refusal" {
+                "Claude が内容を理由に応答を断りました(停止理由: refusal)。表現を変えるか、設定の「プロンプト翻訳」でローカル LLM を選んでください".to_string()
+            } else {
+                format!(
+                    "翻訳結果が空でした(停止理由: {reason})。入力を変えて、もう一度試してください"
+                )
+            };
+            return Err(AppError::assistant("ASSISTANT_API_ERROR", message));
         }
         Ok(Some(cleaned))
     }
