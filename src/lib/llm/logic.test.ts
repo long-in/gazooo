@@ -31,6 +31,7 @@ const install = (over: Partial<LlmInstallState> = {}): LlmInstallState => ({
 
 const llm = (over: Partial<LlmStatus> = {}): LlmStatus => ({
   supported: true,
+  licenseFiles: [],
   installed: true,
   updateAvailable: false,
   runtime: "b12426",

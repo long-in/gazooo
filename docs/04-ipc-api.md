@@ -168,10 +168,13 @@ type SettingsPatch = Partial<Settings>;
 | `assistant_update` | `{ model?; consent?; autoDelete? }` | `status` |
 | `assistant_prompt_get` / `_set` / `_reset`(v0.22) | – / `{ text }` / – | `{ text; defaultText; customized; modelGuide }` / `{ customized }` / `{ text }`(11 §12.5) |
 | `assistant_ask` | `{ conversationId: string \| null; text; params: GenerationParams }` | `{ requestId; conversationId; assistantMessageId }` |
-| `translate_status` | なし | `{ provider; model; ready; reason }`(34 §5) |
-| `translate_update` | `{ patch: { provider?; model? } }` | `translate_status` と同じ(更新後) |
-| `translate_run` | `{ requestId; text; target: { kind; familyId; reference } }` | `{ text: string | null }`(中止は `null`。34) |
+| `translate_status` | なし | `{ provider; model; ready; reason }`(34 §5)。**v0.30 追補(34 §9.5。実装済み)**: `{ provider; model; mtModel; plain: Readiness; polish: Readiness }` |
+| `translate_update` | `{ patch: { provider?; model?; mtModel? } }`(`mtModel` は v0.30 追補) | `translate_status` と同じ(更新後) |
+| `translate_run` | `{ requestId; text; target: { kind; familyId; reference } }` | `{ text: string | null }`(中止は `null`。34)。**v0.30 追補(34 §9.5。承認済み・未実装)**: 引数に `mode: "plain" \| "polish"`(必須。`target` は `polish` のみ必須)、戻り値に `notice?: "polish_failed"` |
 | `translate_cancel` | `{ requestId }` | `void` |
+| `translate_mt_status` | なし | `LlmStatus`(翻訳専用モデルの導入・起動状態。34 §9.14) |
+| `translate_mt_install` / `translate_mt_install_cancel` / `translate_mt_remove` | なし / `{ installId }` / なし | `{ installId }` / `void` / `LlmStatus`(導入・中止・削除。イベント `translate-mt://state`・`translate-mt://install-progress`) |
+| `translate_mt_license` | `{ lang: "ja" \| "en" }` | `{ lang; text }`(PLaMo Community License の全文。アプリに同梱) |
 | `assistant_conversation_list` / `_get` / `_delete` | – / `{ id }` / `{ ids \| null }`(null = すべて) | 会話の一覧 / 取得 / 削除(最大 30 会話、11 §4.1) |
 | `assistant_suggestion_applied` | `{ messageId; index }` | 提案を適用済みとして記録 |
 | `assistant_cancel` | `{ requestId }` | – |

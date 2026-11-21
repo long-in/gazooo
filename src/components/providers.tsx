@@ -18,6 +18,8 @@ import {
   onEngineStatus,
   onLlmInstall,
   onLlmState,
+  onTranslateMtInstall,
+  onTranslateMtState,
   onImageCreated,
   onImageDeleted,
   onJobProgress,
@@ -34,6 +36,7 @@ import { useEngineStore } from "@/stores/engine-store";
 import { useGalleryStore } from "@/stores/gallery-store";
 import { useDebugStore } from "@/stores/debug-store";
 import { useLlmStore } from "@/stores/llm-store";
+import { useTranslateMtStore } from "@/stores/translate-mt-store";
 import { useStripStore } from "@/stores/strip-store";
 import { usePresetStore } from "@/stores/preset-store";
 import { useJobStore } from "@/stores/job-store";
@@ -64,7 +67,10 @@ function SettingsBootstrap() {
 
   // 画面の状態(パネルの開閉・幅・密度)を設定から 1 回だけ取り込む(docs/29 §6)
   useEffect(() => {
-    if (loaded && !useUiStore.getState().hydrated) useUiStore.getState().hydrate(useSettingsStore.getState().settings.uiState);
+    if (loaded && !useUiStore.getState().hydrated)
+      useUiStore
+        .getState()
+        .hydrate(useSettingsStore.getState().settings.uiState);
   }, [loaded]);
 
   useEffect(() => {
@@ -116,7 +122,9 @@ function JobBootstrap() {
     void Promise.all([
       onJobUpdated(applyUpdated),
       onJobProgress(applyProgress),
-      onQueueState(({ paused }) => useJobStore.getState().applyQueueState(paused)),
+      onQueueState(({ paused }) =>
+        useJobStore.getState().applyQueueState(paused),
+      ),
       // 生成画像: ギャラリーに反映する
       onImageCreated((image) => {
         useGalleryStore.getState().applyCreated(image);
@@ -149,9 +157,22 @@ function AssistantBootstrap() {
     const st = () => useAssistantStore.getState();
     void Promise.all([
       onAssistantDelta((p) => st().onDelta(p.requestId, p.text)),
-      onAssistantSuggestion((p) => st().onSuggestion(p.requestId, p.index, p.summary, p.changes, p.model ?? undefined)),
+      onAssistantSuggestion((p) =>
+        st().onSuggestion(
+          p.requestId,
+          p.index,
+          p.summary,
+          p.changes,
+          p.model ?? undefined,
+        ),
+      ),
       onAssistantDone((p) => st().onDone(p.requestId)),
-      onAssistantError((p) => st().onError(p.requestId, toAppError({ code: p.code, message: p.message }))),
+      onAssistantError((p) =>
+        st().onError(
+          p.requestId,
+          toAppError({ code: p.code, message: p.message }),
+        ),
+      ),
     ]).then((fns) => {
       if (cancelled) fns.forEach((fn) => fn());
       else unlisteners.push(...fns);
@@ -174,6 +195,12 @@ function LlmBootstrap() {
     void Promise.all([
       onLlmState((p) => st().applyState(p.state, p.message)),
       onLlmInstall((s) => st().applyInstall(s)),
+      onTranslateMtState((p) =>
+        useTranslateMtStore.getState().applyState(p.state, p.message),
+      ),
+      onTranslateMtInstall((s) =>
+        useTranslateMtStore.getState().applyInstall(s),
+      ),
     ]).then((fns) => {
       if (cancelled) fns.forEach((fn) => fn());
       else unlisteners.push(...fns);
@@ -201,12 +228,13 @@ function EngineProcessBootstrap() {
     let cancelled = false;
     const unlisteners: (() => void)[] = [];
     const st = () => useEngineProcessStore.getState();
-    void Promise.all([onEngineProcState((s) => st().applyState(s)), onEngineLog((p) => st().appendLog(p.line))]).then(
-      (fns) => {
-        if (cancelled) fns.forEach((fn) => fn());
-        else unlisteners.push(...fns);
-      },
-    );
+    void Promise.all([
+      onEngineProcState((s) => st().applyState(s)),
+      onEngineLog((p) => st().appendLog(p.line)),
+    ]).then((fns) => {
+      if (cancelled) fns.forEach((fn) => fn());
+      else unlisteners.push(...fns);
+    });
     void st().load();
     return () => {
       cancelled = true;
@@ -248,7 +276,10 @@ function ModelsBootstrap() {
     let cancelled = false;
     const unlisteners: (() => void)[] = [];
     const { applyDownload, loadDownloads } = useModelsStore.getState();
-    void Promise.all([onModelsProgress(applyDownload), onModelsDone(applyDownload)]).then((fns) => {
+    void Promise.all([
+      onModelsProgress(applyDownload),
+      onModelsDone(applyDownload),
+    ]).then((fns) => {
       if (cancelled) fns.forEach((fn) => fn());
       else unlisteners.push(...fns);
     });

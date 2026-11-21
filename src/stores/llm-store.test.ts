@@ -29,6 +29,7 @@ const idle: LlmInstallState = {
 
 const status = (over: Partial<LlmStatus> = {}): LlmStatus => ({
   supported: true,
+  licenseFiles: [],
   installed: true,
   updateAvailable: false,
   runtime: "b12426",

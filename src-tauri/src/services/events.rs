@@ -112,6 +112,21 @@ impl crate::services::llm::LlmSink for TauriSink {
     }
 }
 
+/// 翻訳専用モデルの状態・導入の通知(本体の `llm://` とは別のイベント名。docs/34 §9.13)。
+pub struct TauriMtSink(pub AppHandle);
+
+impl crate::services::llm::LlmSink for TauriMtSink {
+    fn state(&self, state: crate::services::llm::LlmState, message: Option<&str>) {
+        let _ = self.0.emit(
+            "translate-mt://state",
+            serde_json::json!({ "state": state, "message": message }),
+        );
+    }
+    fn install(&self, state: &crate::services::llm::InstallState) {
+        let _ = self.0.emit("translate-mt://install-progress", state);
+    }
+}
+
 impl crate::services::engine_process::ProcSink for TauriSink {
     fn state(&self, state: &crate::services::engine_process::EngineProcState) {
         let _ = self.0.emit("engine://proc-state", state);

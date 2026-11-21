@@ -22,7 +22,9 @@ import {
   type AssistantProvider,
 } from "@/lib/tauri/assistant";
 import { toAppError } from "@/lib/tauri/errors";
+import { useTranslateMtStore } from "@/stores/translate-mt-store";
 import { useTranslateStore } from "@/stores/translate-store";
+import { TranslateMtSection } from "@/components/settings/translate-mt-section";
 
 /**
  * プロンプト翻訳の設定(docs/34 §4)。AI サポートとは別に、送信先とモデルを選ぶ。
@@ -32,9 +34,11 @@ export function TranslateSection() {
   const t = useT();
   const errorMessage = useErrorMessage();
   const status = useTranslateStore((s) => s.status);
+  const mt = useTranslateMtStore((s) => s.status);
 
   useEffect(() => {
     void useTranslateStore.getState().loadStatus();
+    void useTranslateMtStore.getState().load();
   }, []);
 
   if (!status) return null;
@@ -110,6 +114,34 @@ export function TranslateSection() {
           </p>
         </div>
       )}
+
+      <div className="flex flex-col gap-2">
+        <Label>{t("settings.translate.engine")}</Label>
+        <div className="flex flex-wrap gap-2" role="radiogroup">
+          {(["general", "dedicated"] as const).map((e) => {
+            const disabled = e === "dedicated" && !mt?.installed;
+            return (
+              <button
+                key={e}
+                type="button"
+                role="radio"
+                aria-checked={status.mtModel === e}
+                disabled={disabled}
+                className={`rounded-md border px-2.5 py-1 text-sm disabled:opacity-50 ${status.mtModel === e ? "bg-primary text-primary-foreground" : "bg-background"}`}
+                onClick={() => void update({ mtModel: e })}
+              >
+                {t(`settings.translate.engine.${e}` as const)}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {t("settings.translate.engine.hint")}
+          {!mt?.installed && ` ${t("settings.translate.engine.needInstall")}`}
+        </p>
+      </div>
+
+      <TranslateMtSection />
     </section>
   );
 }

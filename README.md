@@ -63,6 +63,18 @@ ComfyUI が必要なテストは通常は実行されません。ComfyUI を起�
 - `develop` への PR / push で、Windows と macOS の両方で lint・型チェック・テストを実行します(`.github/workflows/ci.yml`)。`develop` への push では、インストーラも生成します。
 - タグ `vX.Y.Z` を push すると、インストーラをビルドして GitHub Releases に **下書き** を作ります(`.github/workflows/release.yml`)。公開前に [リリース前チェックリスト](docs/09-release-checklist.md) を実施してください。
 
+## サードパーティのモデルとライセンス
+
+アプリは、利用者の操作で次のモデル・ソフトウェアをダウンロードして使います(同意画面で取得元・サイズ・ライセンスを確認してから導入します)。
+
+| 名称 | 用途 | ライセンス |
+|---|---|---|
+| llama.cpp | ローカル LLM のランタイム | MIT |
+| Qwen3.5-9B | AI サポート・プロンプト翻訳(ローカル LLM) | Apache-2.0 |
+| **PLaMo 3 Translate 8B** | プロンプト翻訳の「翻訳専用モデル」(任意) | [PLaMo Community License](src-tauri/src/services/llm/licenses/plamo-community-license-ja.txt)([English](src-tauri/src/services/llm/licenses/plamo-community-license-en.txt)) |
+
+**Built with PLaMo.** 翻訳専用モデルは Preferred Networks, Inc. の PLaMo 3 Translate 8B です。モデルはこのリポジトリには含まれず、利用者が設定画面から導入したときだけ Hugging Face から取得します。個人・学術利用は無料です。**商用目的で使う場合は、PLaMo Community License に従い Preferred Networks への事前登録が必要です**(売上 10 億円超は別契約)。規約の全文は、アプリの設定(プロンプト翻訳 > 翻訳専用モデル)からも読めます。
+
 ## データの場所
 
 | | Windows | macOS |

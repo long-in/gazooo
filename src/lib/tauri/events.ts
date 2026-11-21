@@ -65,6 +65,12 @@ export const onLlmState = (handler: (p: { state: LlmState; message: string | nul
 export const onLlmInstall = (handler: (s: LlmInstallState) => void) =>
   subscribe<LlmInstallState>("llm://install-progress", handler);
 
+export const onTranslateMtState = (handler: (p: { state: LlmState; message: string | null }) => void) =>
+  subscribe<{ state: LlmState; message: string | null }>("translate-mt://state", handler);
+
+export const onTranslateMtInstall = (handler: (s: LlmInstallState) => void) =>
+  subscribe<LlmInstallState>("translate-mt://install-progress", handler);
+
 export const onModelsProgress = (handler: (s: DownloadState) => void) =>
   subscribe<DownloadState>("models://progress", handler);
 
