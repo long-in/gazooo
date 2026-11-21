@@ -140,6 +140,14 @@ pub fn run() {
             app.manage(assistant);
             app.manage(llm);
             app.manage(storage);
+            // バックアップ(docs/35)。設定値・ギャラリー・プリセットの取得と復元
+            app.manage(services::backup::BackupService::new(
+                db.clone(),
+                paths.clone(),
+                Arc::new(OsTrash),
+                Arc::new(commands::backup::TauriBackupSink(app.handle().clone())),
+                app.package_info().version.to_string(),
+            ));
             app.manage(engine);
             app.manage(Arc::clone(&jobs));
             app.manage(InputService::new(
@@ -204,6 +212,13 @@ pub fn run() {
             commands::debug::debug_export_logs,
             commands::debug::debug_open_log_dir,
             commands::debug::debug_clear_logs,
+            commands::backup::backup_estimate,
+            commands::backup::backup_export,
+            commands::backup::backup_inspect,
+            commands::backup::backup_orphans,
+            commands::backup::backup_restore,
+            commands::backup::backup_cancel,
+            commands::backup::backup_restart,
             commands::engine::engine_status,
             commands::engine::engine_list_models,
             commands::engine::engine_reconnect,

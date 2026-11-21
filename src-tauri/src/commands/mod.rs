@@ -1,4 +1,5 @@
 pub mod assistant;
+pub mod backup;
 pub mod debug;
 pub mod engine;
 pub mod engine_install;
