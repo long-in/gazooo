@@ -2,6 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type { SuggestedChanges } from "./assistant";
+import type { BackupProgress } from "./backup";
 import type { EngineStatus } from "./engine";
 import type { InstallState } from "./engine-install";
 import type { EngineProcState } from "./engine-process";
@@ -81,3 +82,6 @@ export const onEngineInstallLog = (handler: (p: { line: string }) => void) =>
 
 export const onEngineLog = (handler: (p: { line: string }) => void) =>
   subscribe<{ line: string }>("engine://log", handler);
+
+export const onBackupProgress = (handler: (p: BackupProgress) => void) =>
+  subscribe<BackupProgress>("backup:progress", handler);

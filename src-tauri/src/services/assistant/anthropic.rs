@@ -19,7 +19,12 @@ pub const MAX_TOKENS: u32 = 2048;
 #[derive(Debug, Clone, PartialEq)]
 pub enum StreamEvent {
     Text(String),
-    ToolUse { name: String, input: Value },
+    ToolUse {
+        name: String,
+        input: Value,
+    },
+    /// 停止理由(`end_turn` / `max_tokens` / `refusal` など)。診断用。
+    Stop(String),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -306,6 +311,11 @@ impl StreamState {
                     if !input.is_null() {
                         out.push(StreamEvent::ToolUse { name, input });
                     }
+                }
+            }
+            "message_delta" => {
+                if let Some(r) = v["delta"]["stop_reason"].as_str() {
+                    out.push(StreamEvent::Stop(r.to_string()));
                 }
             }
             "message_stop" => self.finished = true,

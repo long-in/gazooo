@@ -43,6 +43,9 @@ pub enum AppError {
         message: String,
         details: Option<serde_json::Value>,
     },
+    /// バックアップ(docs/35)。`code` は `BACKUP_*`。
+    #[error("{message}")]
+    Backup { code: &'static str, message: String },
     #[error("database error: {0}")]
     Db(String),
     #[error("storage error: {0}")]
@@ -86,6 +89,13 @@ impl AppError {
         }
     }
 
+    pub fn backup(code: &'static str, message: impl Into<String>) -> Self {
+        Self::Backup {
+            code,
+            message: message.into(),
+        }
+    }
+
     pub fn engine_proc(code: &'static str, message: impl Into<String>) -> Self {
         Self::EngineProc {
             code,
@@ -114,6 +124,7 @@ impl AppError {
             Self::Assistant { code, .. } => code,
             Self::Models { code, .. } => code,
             Self::EngineProc { code, .. } => code,
+            Self::Backup { code, .. } => code,
             Self::Db(_) => "DB_ERROR",
             Self::Storage(_) => "STORAGE_ERROR",
             Self::Internal(_) => "INTERNAL",
