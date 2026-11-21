@@ -10,6 +10,7 @@ use crate::services::engine_install::manifest::{Platform, Source};
 use crate::services::models::download::DownloadPolicy;
 
 const EMBEDDED: &str = include_str!("manifest.json");
+const EMBEDDED_MT: &str = include_str!("manifest_mt.json");
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum ArchiveKind {
@@ -50,6 +51,17 @@ pub struct ModelPin {
     pub revision: String,
     pub file_name: String,
     pub source: Source,
+    /// モデルと同じ場所に置く付属ファイル(ライセンス全文など。docs/34 §9.13)。
+    #[serde(default)]
+    pub extra_files: Vec<ExtraFile>,
+}
+
+/// モデルに付属するファイル(ライセンスの写しなど)。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtraFile {
+    pub file_name: String,
+    pub source: Source,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -70,6 +82,13 @@ fn invalid(message: impl Into<String>) -> AppError {
 impl Manifest {
     pub fn embedded() -> AppResult<Self> {
         let m: Self = serde_json::from_str(EMBEDDED)?;
+        m.validate()?;
+        Ok(m)
+    }
+
+    /// 翻訳専用モデル(PLaMo 3 Translate)用。ランタイムは本体と同じ固定。
+    pub fn embedded_mt() -> AppResult<Self> {
+        let m: Self = serde_json::from_str(EMBEDDED_MT)?;
         m.validate()?;
         Ok(m)
     }
@@ -113,6 +132,18 @@ impl Manifest {
         check("windows runtime", &self.runtime.windows_x64.source)?;
         check("macos runtime", &self.runtime.macos_arm64.source)?;
         check("model", &self.model.source)?;
+        for f in &self.model.extra_files {
+            check(&format!("extra file {}", f.file_name), &f.source)?;
+            if f.file_name.contains(['/', '\\'])
+                || f.file_name.contains("..")
+                || f.file_name.is_empty()
+            {
+                return Err(invalid("extra file: name"));
+            }
+            if !f.source.url.contains(&self.model.revision) {
+                return Err(invalid("extra file: revision not pinned"));
+            }
+        }
         for (label, asset) in [
             ("windows", &self.runtime.windows_x64),
             ("macos", &self.runtime.macos_arm64),
@@ -149,6 +180,49 @@ mod tests {
         assert_eq!(m.model.quant, "Q4_K_M");
         assert_eq!(m.runtime.build, "b12426");
         assert!(m.model_label().contains("Qwen3.5-9B"));
+    }
+
+    #[test]
+    fn embedded_mt_manifest_is_valid_and_ships_the_license_files() {
+        let m = Manifest::embedded_mt().unwrap();
+        assert!(m.model_label().contains("PLaMo 3 Translate 8B"));
+        assert_eq!(m.runtime.build, Manifest::embedded().unwrap().runtime.build);
+        let names: Vec<_> = m
+            .model
+            .extra_files
+            .iter()
+            .map(|f| f.file_name.as_str())
+            .collect();
+        assert_eq!(names, ["LICENSE-en.txt", "LICENSE-ja.txt"]);
+        // 付属ファイルもリビジョン固定
+        let mut bad = m.clone();
+        bad.model.extra_files[0].source.url = bad.model.extra_files[0]
+            .source
+            .url
+            .replace(&bad.model.revision, "main");
+        assert!(bad.validate().is_err());
+        let mut bad = m;
+        bad.model.extra_files[0].file_name = "../x".into();
+        assert!(bad.validate().is_err());
+    }
+
+    #[test]
+    fn bundled_license_texts_match_the_pinned_license_files() {
+        use sha2::{Digest, Sha256};
+        let m = Manifest::embedded_mt().unwrap();
+        let hash = |t: &str| format!("{:x}", Sha256::digest(t.as_bytes()));
+        for (lang, file) in [("ja", "LICENSE-ja.txt"), ("en", "LICENSE-en.txt")] {
+            let pinned = m
+                .model
+                .extra_files
+                .iter()
+                .find(|f| f.file_name == file)
+                .unwrap();
+            let text = super::super::plamo_license(lang).unwrap();
+            assert_eq!(hash(text), pinned.source.sha256, "{lang}");
+            assert_eq!(text.len() as u64, pinned.source.size_bytes, "{lang}");
+        }
+        assert!(super::super::plamo_license("fr").is_none());
     }
 
     #[test]

@@ -134,6 +134,8 @@ pub struct EngineProcess {
 
 /// ローカル LLM(docs/30)の管理で使う、`llama-server` 用の起動管理。
 pub const NAME_LLM: &str = "ローカル LLM";
+/// 翻訳専用モデル(docs/34 §9.13)の `llama-server` 用。
+pub const NAME_MT: &str = "翻訳専用モデル";
 
 fn launch_failed(message: impl Into<String>) -> AppError {
     AppError::engine_proc("ENGINE_LAUNCH_FAILED", message)

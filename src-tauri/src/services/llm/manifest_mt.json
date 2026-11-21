@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "manifestVersion": "2026.11.2",
+  "allowedHosts": [
+    "github.com",
+    "objects.githubusercontent.com",
+    "release-assets.githubusercontent.com",
+    "huggingface.co",
+    "hf.co"
+  ],
+  "runtime": {
+    "build": "b12426",
+    "license": "MIT",
+    "windows-x64": {
+      "kind": "zip",
+      "exe": "llama-server.exe",
+      "source": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12426/llama-b12426-bin-win-vulkan-x64.zip",
+        "sha256": "4607416aaa5d223598f54bf99fe081d87414c3a83f8c94ef820947049579fb0e",
+        "sizeBytes": 38287057
+      }
+    },
+    "macos-arm64": {
+      "kind": "tar.gz",
+      "exe": "llama-b12426/llama-server",
+      "source": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12426/llama-b12426-bin-macos-arm64.tar.gz",
+        "sha256": "509014dded612bf2d1afeb30852ff7b5735f2761da74c6f39845a4c04378a3e4",
+        "sizeBytes": 17003210
+      }
+    }
+  },
+  "model": {
+    "name": "PLaMo 3 Translate 8B",
+    "quant": "Q4_K_M",
+    "license": "PLaMo Community License",
+    "repo": "pfnet/plamo-3-translate-8b-GGUF",
+    "revision": "724c63780fbdbd821c86d7b3378a630b10176246",
+    "fileName": "plamo-3-translate-8b-Q4_K_M.gguf",
+    "source": {
+      "url": "https://huggingface.co/pfnet/plamo-3-translate-8b-GGUF/resolve/724c63780fbdbd821c86d7b3378a630b10176246/plamo-3-translate-8b-Q4_K_M.gguf",
+      "sha256": "94e5d3f91b421f7c8900ddaac27b11a19f7441426c954bbb25a2fd60a1640187",
+      "sizeBytes": 5280445728
+    },
+    "extraFiles": [
+      {
+        "fileName": "LICENSE-en.txt",
+        "source": {
+          "url": "https://huggingface.co/pfnet/plamo-3-translate-8b-GGUF/resolve/724c63780fbdbd821c86d7b3378a630b10176246/LICENSE/en",
+          "sha256": "0a91796807d0f1641a0543f2ace9a973190d3acd71a6336251988af410d6c2f7",
+          "sizeBytes": 14585
+        }
+      },
+      {
+        "fileName": "LICENSE-ja.txt",
+        "source": {
+          "url": "https://huggingface.co/pfnet/plamo-3-translate-8b-GGUF/resolve/724c63780fbdbd821c86d7b3378a630b10176246/LICENSE/ja",
+          "sha256": "835e967f5a744c4a337e474f9f23a4cb879a6ac442fcc3e3a557df07d561c68a",
+          "sizeBytes": 15669
+        }
+      }
+    ]
+  }
+}

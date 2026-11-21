@@ -45,7 +45,7 @@ pub struct InstallState {
     /// 現在の手順(1 始まり)。実行中以外は 0。
     pub step: u32,
     pub total_steps: u32,
-    /// `runtime` / `extract` / `model`
+    /// `runtime` / `extract` / `model` / `license`
     pub step_id: Option<String>,
     pub received: Option<u64>,
     pub total: Option<u64>,
@@ -374,6 +374,33 @@ impl LlmService {
             .await?;
         }
 
+        // 付属ファイル(ライセンス全文。docs/34 §9.13)。検証できたものだけ置く
+        for extra in &model.extra_files {
+            let path = layout.models_dir().join(&extra.file_name);
+            if path.is_file() && sha256_file(&path).await? == extra.source.sha256 {
+                continue;
+            }
+            let part = layout
+                .downloads_dir()
+                .join(format!("{}.part", extra.file_name));
+            self.fetch(
+                install_id,
+                3,
+                "license",
+                &client,
+                &policy,
+                &Request {
+                    url: &extra.source.url,
+                    part_path: &part,
+                    final_path: &path,
+                    size_bytes: extra.source.size_bytes,
+                    sha256: &extra.source.sha256,
+                },
+                &mut cancel,
+            )
+            .await?;
+        }
+
         // 記録(検証まで終わったときだけ)。古いビルドは消す
         let record = InstallRecord {
             manifest_version: self.manifest.manifest_version.clone(),
@@ -393,7 +420,9 @@ impl LlmService {
         }
         if let Ok(rd) = std::fs::read_dir(layout.models_dir()) {
             for e in rd.flatten() {
-                if e.file_name().to_string_lossy() != model.file_name {
+                let name = e.file_name().to_string_lossy().to_string();
+                if name != model.file_name && !model.extra_files.iter().any(|f| f.file_name == name)
+                {
                     let _ = std::fs::remove_file(e.path());
                 }
             }

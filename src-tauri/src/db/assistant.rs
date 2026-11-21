@@ -28,6 +28,7 @@ const KEY_LOCAL_BASE_URL: &str = "assistant.local_base_url";
 const KEY_LOCAL_MODEL: &str = "assistant.local_model";
 const KEY_TRANSLATE_PROVIDER: &str = "translate.provider";
 const KEY_TRANSLATE_MODEL: &str = "translate.model";
+const KEY_TRANSLATE_MT_MODEL: &str = "translate.mt_model";
 const KEY_LLM_IDLE: &str = "llm.idle_minutes";
 const KEY_LLM_RELEASE: &str = "llm.release_before_generation";
 
@@ -149,6 +150,48 @@ pub fn set_translate_provider(conn: &Connection, provider: Provider) -> AppResul
         conn,
         KEY_TRANSLATE_PROVIDER,
         &Value::String(provider.as_str().to_string()),
+    )
+}
+
+/// 翻訳エンジン(docs/34 §9.2)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MtModel {
+    /// プロバイダの LLM で翻訳する(現行。既定)。
+    #[default]
+    General,
+    /// アプリ管理のローカルの翻訳専用モデル。
+    Dedicated,
+}
+
+impl MtModel {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::General => "general",
+            Self::Dedicated => "dedicated",
+        }
+    }
+
+    fn parse(s: &str) -> Option<Self> {
+        match s {
+            "general" => Some(Self::General),
+            "dedicated" => Some(Self::Dedicated),
+            _ => None,
+        }
+    }
+}
+
+pub fn translate_mt_model(conn: &Connection) -> AppResult<MtModel> {
+    Ok(get(conn, KEY_TRANSLATE_MT_MODEL)?
+        .and_then(|v| v.as_str().and_then(MtModel::parse))
+        .unwrap_or_default())
+}
+
+pub fn set_translate_mt_model(conn: &Connection, mt: MtModel) -> AppResult<()> {
+    set(
+        conn,
+        KEY_TRANSLATE_MT_MODEL,
+        &Value::String(mt.as_str().to_string()),
     )
 }
 
@@ -664,6 +707,22 @@ mod tests {
 
         // 選べないモデルは拒否
         assert!(db.call(|c| set_translate_model(c, "gpt-4")).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn translate_mt_model_defaults_to_general_and_roundtrips() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(
+            db.call(|c| translate_mt_model(c)).await.unwrap(),
+            MtModel::General
+        );
+        db.call(|c| set_translate_mt_model(c, MtModel::Dedicated))
+            .await
+            .unwrap();
+        assert_eq!(
+            db.call(|c| translate_mt_model(c)).await.unwrap(),
+            MtModel::Dedicated
+        );
     }
 
     #[tokio::test]

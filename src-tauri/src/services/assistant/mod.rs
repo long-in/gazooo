@@ -62,15 +62,44 @@ enum Target {
     Managed,
 }
 
-/// プロンプト翻訳の設定と状態(docs/34 §5)。
+/// ボタンごとの実行可否(docs/34 §9.5)。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Readiness {
+    pub ready: bool,
+    /// 実行できない理由(`no_key` / `no_consent` / `local_not_ready` / `mt_not_installed`)。
+    pub reason: Option<&'static str>,
+}
+
+impl Readiness {
+    fn from_reason(reason: Option<&'static str>) -> Self {
+        Self {
+            ready: reason.is_none(),
+            reason,
+        }
+    }
+}
+
+/// プロンプト翻訳の設定と状態(docs/34 §5・§9.5)。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranslateStatus {
     pub provider: Provider,
     pub model: String,
-    pub ready: bool,
-    /// 実行できない理由(`no_key` / `no_consent` / `local_not_ready`)。
-    pub reason: Option<&'static str>,
+    pub mt_model: store::MtModel,
+    /// [翻訳のみ] の実行可否。
+    pub plain: Readiness,
+    /// [翻訳+校正] の実行可否。
+    pub polish: Readiness,
+}
+
+/// 翻訳の結果(docs/34 §9.5)。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TranslateOutput {
+    /// 中断されたときは `None`。
+    pub text: Option<String>,
+    /// `polish_failed`: 校正できず、翻訳のみを返した。
+    pub notice: Option<&'static str>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -78,6 +107,36 @@ pub struct TranslateStatus {
 pub struct TranslatePatch {
     pub provider: Option<Provider>,
     pub model: Option<String>,
+    pub mt_model: Option<store::MtModel>,
+}
+
+fn mt_not_installed_error() -> AppError {
+    AppError::assistant(
+        "LLM_NOT_INSTALLED",
+        "翻訳専用モデルが導入されていません。設定の「プロンプト翻訳」で、翻訳エンジンを「プロバイダの LLM」にしてください",
+    )
+}
+
+/// 翻訳の出力を整え、断り・空を検出する(docs/34 §9.3)。`check_refused` は校正の断りの目印を調べる。
+fn finalize_translation(out: &str, stop: Option<&str>, check_refused: bool) -> AppResult<String> {
+    let cleaned = translate::clean_output(out);
+    if check_refused && cleaned.contains(translate::REFUSED_MARK) {
+        return Err(AppError::assistant(
+            "ASSISTANT_API_ERROR",
+            "この内容は翻訳できません(未成年や実在の人物を性的に描く内容は扱えません)。入力を見直してください",
+        ));
+    }
+    if cleaned.is_empty() {
+        let reason = stop.unwrap_or("不明");
+        tracing::warn!(stop_reason = reason, "prompt translate returned no text");
+        let message = if reason == "refusal" {
+            "Claude が内容を理由に応答を断りました(停止理由: refusal)。表現を変えるか、設定の「プロンプト翻訳」でローカル LLM を選んでください".to_string()
+        } else {
+            format!("翻訳結果が空でした(停止理由: {reason})。入力を変えて、もう一度試してください")
+        };
+        return Err(AppError::assistant("ASSISTANT_API_ERROR", message));
+    }
+    Ok(cleaned)
 }
 
 /// 翻訳の送信先を、設定と共有の前提(キー・同意・ローカル LLM。docs/34 §4)から決める。
@@ -174,6 +233,8 @@ pub struct AssistantService {
     runtime: std::sync::OnceLock<Arc<dyn LocalRuntime>>,
     /// 実行中のプロンプト翻訳(相談とは独立。docs/34)。
     translating: Mutex<Option<Running>>,
+    /// 翻訳専用モデル(アプリ管理。起動後に設定する。docs/34 §9.13)。
+    mt_runtime: std::sync::OnceLock<Arc<dyn LocalRuntime>>,
 }
 
 impl AssistantService {
@@ -186,7 +247,17 @@ impl AssistantService {
             running: Mutex::new(None),
             runtime: std::sync::OnceLock::new(),
             translating: Mutex::new(None),
+            mt_runtime: std::sync::OnceLock::new(),
         })
+    }
+
+    /// 翻訳専用モデルを接続する(起動時に 1 回)。
+    pub fn set_mt_runtime(&self, runtime: Arc<dyn LocalRuntime>) {
+        let _ = self.mt_runtime.set(runtime);
+    }
+
+    fn mt_installed(&self) -> bool {
+        self.mt_runtime.get().is_some_and(|r| r.installed())
     }
 
     /// アプリ管理のローカル LLM を接続する(起動時に 1 回)。
@@ -581,15 +652,28 @@ impl AssistantService {
     /// プロンプト翻訳の設定と、今すぐ実行できるか(docs/34 §5)。
     pub async fn translate_status(&self) -> AppResult<TranslateStatus> {
         let local_installed = self.runtime.get().is_some_and(|r| r.installed());
+        let mt_ok = self.mt_installed();
         self.db
             .call(move |c| {
                 let (provider, model) = store::translate_settings(c)?;
-                let reason = translate_target(c, provider, &model, local_installed).err();
+                let mt_model = store::translate_mt_model(c)?;
+                let provider_reason = translate_target(c, provider, &model, local_installed)
+                    .err()
+                    .map(|r| r.0);
+                let (plain, polish) = match mt_model {
+                    store::MtModel::General => (provider_reason, provider_reason),
+                    store::MtModel::Dedicated if !mt_ok => {
+                        (Some("mt_not_installed"), Some("mt_not_installed"))
+                    }
+                    // 翻訳のみはローカル完結。校正の 2 段目はプロバイダの LLM を使う。
+                    store::MtModel::Dedicated => (None, provider_reason),
+                };
                 Ok(TranslateStatus {
                     provider,
                     model,
-                    ready: reason.is_none(),
-                    reason: reason.map(|r| r.0),
+                    mt_model,
+                    plain: Readiness::from_reason(plain),
+                    polish: Readiness::from_reason(polish),
                 })
             })
             .await
@@ -604,6 +688,9 @@ impl AssistantService {
                 }
                 if let Some(m) = &patch.model {
                     store::set_translate_model(c, m)?;
+                }
+                if let Some(mt) = patch.mt_model {
+                    store::set_translate_mt_model(c, mt)?;
                 }
                 Ok(())
             })
@@ -625,8 +712,9 @@ impl AssistantService {
         &self,
         request_id: String,
         text: String,
+        mode: translate::Mode,
         target: translate::TranslateTarget,
-    ) -> AppResult<Option<String>> {
+    ) -> AppResult<TranslateOutput> {
         let text = text.trim().to_string();
         let len = text.chars().count();
         if len == 0 || len > translate::MAX_INPUT_CHARS {
@@ -655,7 +743,9 @@ impl AssistantService {
                 cancel: cancel_tx,
             });
         }
-        let result = self.translate_inner(&text, &target, &mut cancel_rx).await;
+        let result = self
+            .translate_inner(&text, mode, &target, &mut cancel_rx)
+            .await;
         if let Ok(mut g) = self.translating.lock() {
             *g = None;
         }
@@ -668,26 +758,137 @@ impl AssistantService {
     async fn translate_inner(
         &self,
         text: &str,
+        mode: translate::Mode,
         target: &translate::TranslateTarget,
         cancel_rx: &mut watch::Receiver<bool>,
-    ) -> AppResult<Option<String>> {
+    ) -> AppResult<TranslateOutput> {
+        use translate::Mode;
         let local_installed = self.runtime.get().is_some_and(|r| r.installed());
-        let dest = self
+        let (mt_model, provider_dest) = self
             .db
             .call(move |c| {
                 let (provider, model) = store::translate_settings(c)?;
-                translate_target(c, provider, &model, local_installed).map_err(|r| r.1)
+                let mt_model = store::translate_mt_model(c)?;
+                // 翻訳専用モデルの [翻訳のみ] は、プロバイダの前提(キー・同意)を要しないため、
+                // ここでは失敗を持ち越す。
+                let dest = translate_target(c, provider, &model, local_installed).map_err(|r| r.1);
+                Ok((mt_model, dest))
             })
             .await?;
-        let system = translate::system_prompt();
-        let user = translate::user_message(capabilities::catalog(), target, text);
-        let messages = vec![("user".to_string(), user)];
+        let done = |text: Option<String>| TranslateOutput { text, notice: None };
+        let catalog = capabilities::catalog();
+
+        match (mode, mt_model) {
+            // プロバイダの LLM で 1 段(校正なしは短い翻訳専用の指示。校正は現行どおり)
+            (Mode::Plain, store::MtModel::General) => {
+                let dest = provider_dest?;
+                let system = translate::plain_system_prompt();
+                let user = translate::plain_user_message(text);
+                let out = self
+                    .run_translation(&dest, &system, &user, false, cancel_rx)
+                    .await?;
+                Ok(done(out))
+            }
+            (Mode::Polish, store::MtModel::General) => {
+                let dest = provider_dest?;
+                let system = translate::system_prompt();
+                let user = translate::user_message(catalog, target, text);
+                let out = self
+                    .run_translation(&dest, &system, &user, true, cancel_rx)
+                    .await?;
+                Ok(done(out))
+            }
+            // 翻訳専用モデル(ローカル)。モデルの導入・起動は銘柄の確定後に実装する(docs/34 §9.4)。
+            (Mode::Plain, store::MtModel::Dedicated) => {
+                let out = self.mt_translate(text, cancel_rx).await?;
+                Ok(done(out))
+            }
+            (Mode::Polish, store::MtModel::Dedicated) => {
+                // 多言語モデル(日本語のまま校正する)では 1 段目を飛ばす
+                let draft = if translate::keeps_japanese(catalog, target) {
+                    None
+                } else {
+                    match self.mt_translate(text, cancel_rx).await? {
+                        Some(d) => Some(d),
+                        None => return Ok(done(None)),
+                    }
+                };
+                let second = match provider_dest {
+                    Ok(dest) => {
+                        let system = translate::system_prompt();
+                        let user = match &draft {
+                            Some(d) => translate::polish_draft_message(catalog, target, d),
+                            None => translate::user_message(catalog, target, text),
+                        };
+                        self.run_translation(&dest, &system, &user, true, cancel_rx)
+                            .await
+                    }
+                    Err(e) => Err(e),
+                };
+                let (text, notice) = translate::finish_polish(draft, second)?;
+                Ok(TranslateOutput { text, notice })
+            }
+        }
+    }
+
+    /// 翻訳専用モデルでの翻訳(1 段目。docs/34 §9.3)。未導入なら `LLM_NOT_INSTALLED`。中断なら `None`。
+    async fn mt_translate(
+        &self,
+        text: &str,
+        cancel_rx: &mut watch::Receiver<bool>,
+    ) -> AppResult<Option<String>> {
+        let rt = match self.mt_runtime.get() {
+            Some(rt) if rt.installed() => rt,
+            _ => return Err(mt_not_installed_error()),
+        };
+        // 生成中はアイドル停止の対象にしない(起動の待ち時間も含める)
+        rt.use_started();
+        let result = async {
+            let started = tokio::select! {
+                _ = anthropic::cancelled(cancel_rx) => None,
+                r = rt.ensure_ready() => Some(r),
+            };
+            let ep = match started {
+                None => return Ok(None),
+                Some(r) => r?,
+            };
+            let body = translate::mt_body(&ep.model, text);
+            let mut out = String::new();
+            let mut stop: Option<String> = None;
+            let end = self
+                .openai
+                .stream_body(&ep.base_url, &body, cancel_rx, |ev| match ev {
+                    StreamEvent::Text(t) => out.push_str(&t),
+                    StreamEvent::Stop(r) => stop = Some(r),
+                    StreamEvent::ToolUse { .. } => {}
+                })
+                .await?;
+            if end == StreamEnd::Cancelled {
+                return Ok(None);
+            }
+            finalize_translation(&out, stop.as_deref(), false).map(Some)
+        }
+        .await;
+        rt.use_finished();
+        result
+    }
+
+    /// LLM に 1 回送って、整えた本文を得る。中断なら `None`。`check_refused` は校正の断りの目印を調べる。
+    async fn run_translation(
+        &self,
+        dest: &Target,
+        system: &str,
+        user: &str,
+        check_refused: bool,
+        cancel_rx: &mut watch::Receiver<bool>,
+    ) -> AppResult<Option<String>> {
+        let messages = vec![("user".to_string(), user.to_string())];
         let mut out = String::new();
         let mut stop: Option<String> = None;
         let end = self
             .dispatch(
-                &dest,
-                &system,
+                dest,
+                system,
                 &messages,
                 serde_json::json!([]),
                 cancel_rx,
@@ -701,26 +902,7 @@ impl AssistantService {
         if end == StreamEnd::Cancelled {
             return Ok(None);
         }
-        let cleaned = translate::clean_output(&out);
-        if cleaned.contains(translate::REFUSED_MARK) {
-            return Err(AppError::assistant(
-                "ASSISTANT_API_ERROR",
-                "この内容は翻訳できません(未成年や実在の人物を性的に描く内容は扱えません)。入力を見直してください",
-            ));
-        }
-        if cleaned.is_empty() {
-            let reason = stop.as_deref().unwrap_or("不明");
-            tracing::warn!(stop_reason = reason, "prompt translate returned no text");
-            let message = if reason == "refusal" {
-                "Claude が内容を理由に応答を断りました(停止理由: refusal)。表現を変えるか、設定の「プロンプト翻訳」でローカル LLM を選んでください".to_string()
-            } else {
-                format!(
-                    "翻訳結果が空でした(停止理由: {reason})。入力を変えて、もう一度試してください"
-                )
-            };
-            return Err(AppError::assistant("ASSISTANT_API_ERROR", message));
-        }
-        Ok(Some(cleaned))
+        finalize_translation(&out, stop.as_deref(), check_refused).map(Some)
     }
 
     fn release(&self) {
@@ -1276,6 +1458,235 @@ data: {\"type\":\"message_stop\"}
         })
         .await
         .unwrap();
+    }
+
+    async fn use_external_for_translate(svc: &Arc<AssistantService>, mock_url: &str) {
+        use_external(svc, mock_url).await;
+        svc.translate_update(TranslatePatch {
+            provider: Some(Provider::LocalExternal),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    }
+
+    fn qwen_target() -> translate::TranslateTarget {
+        translate::TranslateTarget {
+            kind: Some(ModelKind::QwenImage),
+            family_id: Some("qwen-image-2-1".into()),
+            reference: false,
+        }
+    }
+
+    fn sdxl_target() -> translate::TranslateTarget {
+        translate::TranslateTarget {
+            kind: Some(ModelKind::Sdxl),
+            family_id: Some("checkpoint-noobai-xl".into()),
+            reference: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn translate_status_reports_each_button_and_the_dedicated_engine() {
+        let (svc, _rec, _db, _mock) = setup(vec![]).await;
+        // 既定(プロバイダの LLM。キー未登録)→ 2 つとも同じ理由
+        let s = svc.translate_status().await.unwrap();
+        assert_eq!(s.mt_model, store::MtModel::General);
+        assert!(!s.plain.ready && !s.polish.ready);
+        assert_eq!(s.plain.reason, s.polish.reason);
+
+        // 翻訳専用モデル(未導入)→ 2 つとも mt_not_installed
+        svc.translate_update(TranslatePatch {
+            mt_model: Some(store::MtModel::Dedicated),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        let s = svc.translate_status().await.unwrap();
+        assert_eq!(s.plain.reason, Some("mt_not_installed"));
+        assert_eq!(s.polish.reason, Some("mt_not_installed"));
+    }
+
+    #[tokio::test]
+    async fn plain_translate_uses_the_short_prompt_and_polish_uses_the_full_one() {
+        let (svc, _rec, _db, mock) =
+            setup(vec![Route::post("/v1/chat/completions", 200, OPENAI_SSE)]).await;
+        use_external_for_translate(&svc, &mock.url).await;
+
+        let out = svc
+            .translate(
+                "r1".into(),
+                "金髪の少女".into(),
+                translate::Mode::Plain,
+                sdxl_target(),
+            )
+            .await
+            .unwrap();
+        assert!(out.text.is_some() && out.notice.is_none());
+        let out = svc
+            .translate(
+                "r2".into(),
+                "金髪の少女".into(),
+                translate::Mode::Polish,
+                sdxl_target(),
+            )
+            .await
+            .unwrap();
+        assert!(out.text.is_some() && out.notice.is_none());
+
+        let reqs = mock.requests.lock().unwrap().clone();
+        assert_eq!(reqs.len(), 2);
+        // 校正なし: 断りの目印・対象モデルの要点を送らない
+        assert!(!reqs[0].contains("[REFUSED]") && !reqs[0].contains("対象モデル"));
+        // 校正: 断りの規則と対象モデルの要点を送る
+        assert!(reqs[1].contains("[REFUSED]") && reqs[1].contains("対象モデル"));
+    }
+
+    #[tokio::test]
+    async fn dedicated_engine_without_the_model_fails_plain_and_polish_but_skips_stage_one_for_qwen()
+     {
+        let (svc, _rec, _db, mock) =
+            setup(vec![Route::post("/v1/chat/completions", 200, OPENAI_SSE)]).await;
+        use_external_for_translate(&svc, &mock.url).await;
+        svc.translate_update(TranslatePatch {
+            mt_model: Some(store::MtModel::Dedicated),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+        let plain = svc
+            .translate(
+                "r1".into(),
+                "猫".into(),
+                translate::Mode::Plain,
+                sdxl_target(),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(plain.code(), "LLM_NOT_INSTALLED");
+        let polish = svc
+            .translate(
+                "r2".into(),
+                "猫".into(),
+                translate::Mode::Polish,
+                sdxl_target(),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(polish.code(), "LLM_NOT_INSTALLED");
+        assert!(mock.requests.lock().unwrap().is_empty());
+
+        // 多言語モデルは 1 段目を飛ばして、元の日本語を校正する
+        let out = svc
+            .translate(
+                "r3".into(),
+                "猫".into(),
+                translate::Mode::Polish,
+                qwen_target(),
+            )
+            .await
+            .unwrap();
+        assert!(out.text.is_some() && out.notice.is_none());
+        assert_eq!(mock.requests.lock().unwrap().len(), 1);
+    }
+
+    async fn use_dedicated(svc: &Arc<AssistantService>, mock_url: &str) -> Arc<FakeRuntime> {
+        let rt = FakeRuntime::new(
+            true,
+            Some(LocalEndpoint {
+                base_url: format!("{mock_url}/v1"),
+                model: "plamo-3-translate".into(),
+            }),
+        );
+        svc.set_mt_runtime(rt.clone());
+        svc.translate_update(TranslatePatch {
+            mt_model: Some(store::MtModel::Dedicated),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        rt
+    }
+
+    #[tokio::test]
+    async fn dedicated_plain_runs_locally_with_the_fixed_direction_and_needs_no_key() {
+        let (svc, _rec, _db, mock) =
+            setup(vec![Route::post("/v1/chat/completions", 200, OPENAI_SSE)]).await;
+        let rt = use_dedicated(&svc, &mock.url).await;
+
+        // キー・同意なしでも、翻訳のみは実行できる(校正は 2 段目のプロバイダの前提が要る)
+        let s = svc.translate_status().await.unwrap();
+        assert!(s.plain.ready, "{s:?}");
+        assert!(!s.polish.ready);
+
+        let out = svc
+            .translate(
+                "r1".into(),
+                "金髪の少女".into(),
+                translate::Mode::Plain,
+                sdxl_target(),
+            )
+            .await
+            .unwrap();
+        assert!(out.text.is_some() && out.notice.is_none());
+        assert_eq!(rt.counts(), (1, 1));
+
+        let reqs = mock.requests.lock().unwrap().clone();
+        assert_eq!(reqs.len(), 1);
+        assert!(
+            reqs[0].contains("\"target_lang\":\"en\"")
+                && reqs[0].contains("\"source_lang\":\"ja\"")
+        );
+        assert!(
+            !reqs[0].contains("\"role\":\"system\""),
+            "システムメッセージは送らない"
+        );
+        assert!(!reqs[0].contains("/v1/messages"), "Anthropic へは送らない");
+    }
+
+    #[tokio::test]
+    async fn dedicated_polish_runs_two_stages_and_falls_back_to_the_draft() {
+        let (svc, _rec, _db, mock) =
+            setup(vec![Route::post("/v1/chat/completions", 200, OPENAI_SSE)]).await;
+        use_external_for_translate(&svc, &mock.url).await;
+        use_dedicated(&svc, &mock.url).await;
+
+        // 2 段: 1 段目は翻訳専用モデル、2 段目はプロバイダ(外部サーバ)
+        let out = svc
+            .translate(
+                "r1".into(),
+                "猫".into(),
+                translate::Mode::Polish,
+                sdxl_target(),
+            )
+            .await
+            .unwrap();
+        assert!(out.text.is_some() && out.notice.is_none());
+        let reqs = mock.requests.lock().unwrap().clone();
+        assert_eq!(reqs.len(), 2);
+        assert!(reqs[0].contains("\"target_lang\":\"en\""));
+        assert!(reqs[1].contains("[REFUSED]") && reqs[1].contains("機械翻訳された英語"));
+        assert!(!reqs[1].contains("\"target_lang\""));
+
+        // 2 段目が使えない(プロバイダが Anthropic でキー未登録)→ 1 段目の訳を返して通知
+        svc.translate_update(TranslatePatch {
+            provider: Some(Provider::Anthropic),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        let out = svc
+            .translate(
+                "r2".into(),
+                "猫".into(),
+                translate::Mode::Polish,
+                sdxl_target(),
+            )
+            .await
+            .unwrap();
+        assert!(out.text.is_some());
+        assert_eq!(out.notice, Some("polish_failed"));
     }
 
     #[tokio::test]

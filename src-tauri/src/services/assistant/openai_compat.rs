@@ -117,15 +117,26 @@ impl OpenAiClient {
         model: &str,
         req: &MessageRequest<'_>,
         cancel: &mut watch::Receiver<bool>,
-        mut on_event: impl FnMut(StreamEvent),
+        on_event: impl FnMut(StreamEvent),
     ) -> AppResult<StreamEnd> {
         let body = build_body(model, req);
+        self.stream_body(base, &body, cancel, on_event).await
+    }
+
+    /// 組み立て済みの本文を送り、ストリームを `on_event` へ流す(翻訳専用モデル。docs/34 §9.3)。
+    pub async fn stream_body(
+        &self,
+        base: &str,
+        body: &Value,
+        cancel: &mut watch::Receiver<bool>,
+        mut on_event: impl FnMut(StreamEvent),
+    ) -> AppResult<StreamEnd> {
         let resp = tokio::select! {
             _ = cancelled(cancel) => return Ok(StreamEnd::Cancelled),
             r = self
                 .http
                 .post(format!("{base}/chat/completions"))
-                .json(&body)
+                .json(body)
                 .send() => r.map_err(|e| network_error(&e, base))?,
         };
         let status = resp.status();

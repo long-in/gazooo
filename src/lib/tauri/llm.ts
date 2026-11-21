@@ -12,7 +12,7 @@ export interface LlmInstallState {
   /** 現在の手順(1 始まり)。実行中以外は 0。 */
   step: number;
   totalSteps: number;
-  /** `runtime` / `extract` / `model` */
+  /** `runtime` / `extract` / `model` / `license` */
   stepId: string | null;
   received: number | null;
   total: number | null;
@@ -28,6 +28,8 @@ export interface LlmStatus {
   model: string | null;
   runtimeLicense: string;
   modelLicense: string;
+  /** 導入済みのライセンス全文のファイル名(翻訳専用モデル。docs/34 §9.13)。 */
+  licenseFiles: string[];
   /** 導入・更新でダウンロードするサイズの目安(MB)。 */
   downloadMb: number;
   state: LlmState;

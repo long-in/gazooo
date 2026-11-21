@@ -773,3 +773,29 @@ async fn real_llama_server_answers_and_frees_memory() {
     assert!(!svc.proc.has_child());
     assert_eq!(svc.status().await.unwrap().state, LlmState::Stopped);
 }
+
+#[test]
+fn mt_spec_uses_the_translate_alias_and_no_qwen_thinking_switch() {
+    let p = LaunchParams {
+        exe: PathBuf::from("llama-server"),
+        model: PathBuf::from("plamo.gguf"),
+        port: 18080,
+        gpu_layers: None,
+    };
+    let args: Vec<String> = mt_spec(&p)
+        .args
+        .iter()
+        .map(|a| a.to_string_lossy().to_string())
+        .collect();
+    assert!(args.contains(&"--no-prefill-assistant".to_string()));
+    assert!(args.contains(&MT_MODEL_ALIAS.to_string()));
+    assert!(args.contains(&"4096".to_string()));
+    assert!(!args.iter().any(|a| a.contains("enable_thinking")));
+    // 本体の起動引数は変えていない
+    let main: Vec<String> = default_spec(&p)
+        .args
+        .iter()
+        .map(|a| a.to_string_lossy().to_string())
+        .collect();
+    assert!(main.iter().any(|a| a.contains("enable_thinking")));
+}

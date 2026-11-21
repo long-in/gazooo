@@ -135,10 +135,22 @@ pub fn run() {
                 Some(log_dir.join("llm.log")),
             );
             assistant.set_runtime(llm.clone());
+            // 翻訳専用モデル(docs/34 §9.13)。本体とは別のディレクトリ・マニフェスト。同時には起動しない
+            let mt = services::llm::LlmService::new_mt(
+                db.clone(),
+                paths.data_dir.join("llm-mt"),
+                services::llm::manifest::Manifest::embedded_mt()?,
+                Arc::new(services::events::TauriMtSink(app.handle().clone())),
+                Some(log_dir.join("llm-mt.log")),
+            );
+            services::llm::LlmService::link_peers(&llm, &mt);
+            assistant.set_mt_runtime(mt.clone());
             jobs.set_generation_hook(llm.clone());
             tauri::async_runtime::spawn(Arc::clone(&llm).run_idle_monitor());
+            tauri::async_runtime::spawn(Arc::clone(&mt).run_idle_monitor());
             app.manage(assistant);
             app.manage(llm);
+            app.manage(services::llm::MtLlm(mt));
             app.manage(storage);
             // バックアップ(docs/35)。設定値・ギャラリー・プリセットの取得と復元
             app.manage(services::backup::BackupService::new(
@@ -272,6 +284,11 @@ pub fn run() {
             commands::llm::llm_stop,
             commands::llm::llm_logs,
             commands::llm::llm_update_settings,
+            commands::translate_mt::translate_mt_status,
+            commands::translate_mt::translate_mt_install,
+            commands::translate_mt::translate_mt_install_cancel,
+            commands::translate_mt::translate_mt_remove,
+            commands::translate_mt::translate_mt_license,
             commands::assistant::assistant_prompt_get,
             commands::assistant::assistant_prompt_set,
             commands::assistant::assistant_prompt_reset,
@@ -306,6 +323,15 @@ pub fn run() {
                     let _ =
                         tokio::time::timeout(std::time::Duration::from_secs(15), llm.shutdown())
                             .await;
+                });
+            }
+            if let tauri::RunEvent::Exit = event
+                && let Some(mt) = app.try_state::<services::llm::MtLlm>()
+            {
+                let mt = Arc::clone(&mt.0);
+                tauri::async_runtime::block_on(async move {
+                    let _ = tokio::time::timeout(std::time::Duration::from_secs(15), mt.shutdown())
+                        .await;
                 });
             }
             if let tauri::RunEvent::Exit = event

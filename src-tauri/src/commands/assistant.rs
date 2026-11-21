@@ -9,7 +9,9 @@ use crate::error::AppResult;
 use crate::services::assistant::openai_compat::LocalCheck;
 use crate::services::assistant::{
     AskStarted, AssistantPatch, AssistantService, PromptState, TranslatePatch, TranslateStatus,
-    capabilities, context::ModelContext, translate::TranslateTarget,
+    capabilities,
+    context::ModelContext,
+    translate::{Mode, TranslateTarget},
 };
 use crate::services::engine::EngineService;
 
@@ -141,6 +143,8 @@ pub async fn assistant_suggestion_applied(
 pub struct TranslateResult {
     /// 中断されたときは `None`。
     pub text: Option<String>,
+    /// `polish_failed`: 校正できず、翻訳のみを返した(docs/34 §9.2)。
+    pub notice: Option<&'static str>,
 }
 
 #[tauri::command]
@@ -160,10 +164,15 @@ pub async fn translate_run(
     svc: Svc<'_>,
     request_id: String,
     text: String,
-    target: TranslateTarget,
+    mode: Mode,
+    target: Option<TranslateTarget>,
 ) -> AppResult<TranslateResult> {
+    let out = svc
+        .translate(request_id, text, mode, target.unwrap_or_default())
+        .await?;
     Ok(TranslateResult {
-        text: svc.translate(request_id, text, target).await?,
+        text: out.text,
+        notice: out.notice,
     })
 }
 

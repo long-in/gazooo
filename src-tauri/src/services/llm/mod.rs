@@ -21,14 +21,35 @@ use crate::services::assistant::{LocalEndpoint, LocalRuntime};
 use crate::services::engine_install::manifest::Platform;
 use crate::services::engine_process::config::LaunchSpec;
 use crate::services::engine_process::{
-    EngineProcState, EngineProcess, NAME_LLM, Probe, ProcSink, ProcStatus,
+    EngineProcState, EngineProcess, NAME_LLM, NAME_MT, Probe, ProcSink, ProcStatus,
 };
 use crate::services::models::download::{CancelMode, DownloadPolicy};
 
 pub use self::installer::{InstallState, InstallStatus};
 
+/// PLaMo Community License の全文(導入前の同意画面でも読めるよう、アプリに同梱する。docs/34 §9.13)。
+/// マニフェストの付属ファイル(`LICENSE-ja.txt` / `LICENSE-en.txt`)と同一であることをテストで確認する。
+const PLAMO_LICENSE_JA: &str = include_str!("licenses/plamo-community-license-ja.txt");
+const PLAMO_LICENSE_EN: &str = include_str!("licenses/plamo-community-license-en.txt");
+
+/// 言語(`ja` / `en`)ごとのライセンス全文。
+pub fn plamo_license(lang: &str) -> Option<&'static str> {
+    match lang {
+        "ja" => Some(PLAMO_LICENSE_JA),
+        "en" => Some(PLAMO_LICENSE_EN),
+        _ => None,
+    }
+}
+
+/// 翻訳専用モデルの `LlmService`(docs/34 §9.13)。Tauri の状態として、本体と区別するための包み。
+pub struct MtLlm(pub Arc<LlmService>);
+
 /// API で使うモデル名(`llama-server --alias`)。
 pub const MODEL_ALIAS: &str = "qwen3.5-9b";
+/// 翻訳専用モデルのモデル名(docs/34 §9.13)。
+pub const MT_MODEL_ALIAS: &str = "plamo-3-translate";
+/// 翻訳専用モデルのコンテキスト長(入力 2,000 文字 + 訳文に十分。小さくして VRAM を抑える)。
+const MT_CONTEXT_SIZE: u32 = 4096;
 /// コンテキスト長。システムプロンプト(約 8,000 文字)+ フォーム + 履歴 20 件 + 回答(2,048 トークン)に十分な値。
 const CONTEXT_SIZE: u32 = 16384;
 /// 起動(モデルの読み込み)を待つ上限。
@@ -77,6 +98,8 @@ pub struct LlmStatus {
     /// ライセンス(導入の同意画面に出す)。
     pub runtime_license: String,
     pub model_license: String,
+    /// 導入済みのライセンス全文のファイル名(設定画面の表示用)。
+    pub license_files: Vec<String>,
     /// 導入・更新でダウンロードするサイズの目安(MB)。
     pub download_mb: u64,
     pub state: LlmState,
@@ -186,6 +209,38 @@ pub fn default_spec(p: &LaunchParams) -> LaunchSpec {
     }
 }
 
+/// 翻訳専用モデル(PLaMo 3 Translate)の起動のコマンド(docs/34 §9.13)。
+/// 翻訳の向き(`target_lang` / `source_lang`)は要求ごとに送る。`--no-prefill-assistant` は公式の推奨。
+pub fn mt_spec(p: &LaunchParams) -> LaunchSpec {
+    let mut args: Vec<OsString> = vec![
+        "-m".into(),
+        p.model.clone().into_os_string(),
+        "--host".into(),
+        "127.0.0.1".into(),
+        "--port".into(),
+        p.port.to_string().into(),
+        "--alias".into(),
+        MT_MODEL_ALIAS.into(),
+        "--jinja".into(),
+        "--no-prefill-assistant".into(),
+        "-c".into(),
+        MT_CONTEXT_SIZE.to_string().into(),
+        "-np".into(),
+        "1".into(),
+        "-cram".into(),
+        "0".into(),
+    ];
+    if let Some(n) = p.gpu_layers {
+        args.push("-ngl".into());
+        args.push(n.to_string().into());
+    }
+    LaunchSpec {
+        program: p.exe.clone(),
+        args,
+        cwd: p.exe.parent().map(PathBuf::from),
+    }
+}
+
 type SpecBuilder = Box<dyn Fn(&LaunchParams) -> LaunchSpec + Send + Sync>;
 
 // ---------------------------------------------------------------- サービス
@@ -212,6 +267,10 @@ pub struct LlmService {
     /// 起動の確認(`ensure_ready`)を 1 つにする。
     start_lock: tokio::sync::Mutex<()>,
     spec_builder: SpecBuilder,
+    /// API で使うモデル名。
+    alias: &'static str,
+    /// もう一方のローカル LLM(本体 と 翻訳専用モデル)。同時に 2 つは起動しない(docs/34 §9.4)。
+    peer: std::sync::OnceLock<std::sync::Weak<LlmService>>,
 }
 
 /// `GET /health` が 200 を返すか(外部クレートを使わない最小の HTTP)。
@@ -274,6 +333,36 @@ impl LlmService {
         )
     }
 
+    /// 翻訳専用モデル用(docs/34 §9.13)。導入先・マニフェスト・起動引数だけが本体と違う。
+    pub fn new_mt(
+        db: Db,
+        root: PathBuf,
+        manifest: Manifest,
+        sink: Arc<dyn LlmSink>,
+        log_path: Option<PathBuf>,
+    ) -> Arc<Self> {
+        Self::build(
+            db,
+            root,
+            manifest,
+            Platform::current(),
+            sink,
+            log_path,
+            health_probe(),
+            READY_TIMEOUT,
+            Box::new(mt_spec),
+            None,
+            MT_MODEL_ALIAS,
+            NAME_MT,
+        )
+    }
+
+    /// 本体と翻訳専用モデルを互いに結び付ける(起動時に 1 回)。
+    pub fn link_peers(a: &Arc<Self>, b: &Arc<Self>) {
+        let _ = a.peer.set(Arc::downgrade(b));
+        let _ = b.peer.set(Arc::downgrade(a));
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn with_options(
         db: Db,
@@ -287,13 +376,44 @@ impl LlmService {
         spec_builder: SpecBuilder,
         policy: Option<DownloadPolicy>,
     ) -> Arc<Self> {
+        Self::build(
+            db,
+            root,
+            manifest,
+            platform,
+            sink,
+            log_path,
+            probe,
+            ready_timeout,
+            spec_builder,
+            policy,
+            MODEL_ALIAS,
+            NAME_LLM,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build(
+        db: Db,
+        root: PathBuf,
+        manifest: Manifest,
+        platform: Option<Platform>,
+        sink: Arc<dyn LlmSink>,
+        log_path: Option<PathBuf>,
+        probe: Probe,
+        ready_timeout: Duration,
+        spec_builder: SpecBuilder,
+        policy: Option<DownloadPolicy>,
+        alias: &'static str,
+        proc_name: &'static str,
+    ) -> Arc<Self> {
         let policy = policy.unwrap_or_else(|| manifest.policy());
         let proc = EngineProcess::with_name(
             Arc::new(ProcBridge(Arc::clone(&sink))),
             log_path,
             probe,
             ready_timeout,
-            NAME_LLM,
+            proc_name,
         );
         Arc::new(Self {
             db,
@@ -312,6 +432,8 @@ impl LlmService {
             }),
             start_lock: tokio::sync::Mutex::new(()),
             spec_builder,
+            alias,
+            peer: std::sync::OnceLock::new(),
         })
     }
 
@@ -380,6 +502,14 @@ impl LlmService {
             model: installed.then(|| self.manifest.model_label()),
             runtime_license: self.manifest.runtime.license.clone(),
             model_license: self.manifest.model.license.clone(),
+            license_files: self
+                .manifest
+                .model
+                .extra_files
+                .iter()
+                .filter(|f| self.layout.models_dir().join(&f.file_name).is_file())
+                .map(|f| f.file_name.clone())
+                .collect(),
             download_mb: model_mb + runtime_mb,
             state,
             message: proc.message,
@@ -478,6 +608,7 @@ impl LlmService {
     /// 準備完了まで待つ。止まっていれば起動する。VRAM 不足などで落ちたら、GPU を使わずに 1 回だけ再試行する。
     pub async fn ensure_ready_endpoint(&self) -> AppResult<LocalEndpoint> {
         let _guard = self.start_lock.lock().await;
+        self.stop_peer().await?;
         if !self.is_installed() {
             return Err(llm_error(
                 "LLM_NOT_INSTALLED",
@@ -498,7 +629,7 @@ impl LlmService {
                         .ok_or_else(|| AppError::internal("llm port unknown"))?;
                     return Ok(LocalEndpoint {
                         base_url: format!("http://127.0.0.1:{port}/v1"),
-                        model: MODEL_ALIAS.to_string(),
+                        model: self.alias.to_string(),
                     });
                 }
                 ProcStatus::Stopped => {
@@ -528,6 +659,25 @@ impl LlmService {
             }
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
+    }
+
+    /// もう一方のローカル LLM が起動中なら止める(VRAM の競合を避ける)。使用中なら断る。
+    async fn stop_peer(&self) -> AppResult<()> {
+        let Some(peer) = self.peer.get().and_then(std::sync::Weak::upgrade) else {
+            return Ok(());
+        };
+        if !peer.proc.has_child() {
+            return Ok(());
+        }
+        if peer.inner.lock().map(|g| g.busy > 0).unwrap_or(false) {
+            return Err(llm_error(
+                "LLM_BUSY",
+                "もう一方のローカル LLM が使用中です。完了してからやり直してください",
+            ));
+        }
+        tracing::info!("stopping the other local llm before starting this one");
+        peer.proc.stop().await?;
+        Ok(())
     }
 
     pub async fn ensure_ready(&self) -> AppResult<()> {
@@ -682,6 +832,9 @@ impl LocalRuntime for LlmService {
 impl crate::services::jobs::GenerationHook for LlmService {
     async fn before_generation(&self) {
         self.release_for_generation().await;
+        if let Some(peer) = self.peer.get().and_then(std::sync::Weak::upgrade) {
+            peer.release_for_generation().await;
+        }
     }
 }
 

@@ -12,6 +12,7 @@ import { toAppError } from "@/lib/tauri/errors";
 import type { GenerationParams } from "@/lib/tauri/jobs";
 import {
   MAX_TRANSLATE_INPUT_CHARS,
+  type TranslateMode,
   translateCancel,
   translateRun,
 } from "@/lib/tauri/translate";
@@ -59,6 +60,7 @@ export function TranslateBox({ params }: { params: GenerationParams }) {
   const [text, setText] = useState("");
   const [mode, setMode] = useState<ApplyMode>("replace");
   const [requestId, setRequestId] = useState<string | null>(null);
+  const [runningMode, setRunningMode] = useState<TranslateMode | null>(null);
   const running = requestId !== null;
   const mounted = useRef(true);
 
@@ -89,18 +91,27 @@ export function TranslateBox({ params }: { params: GenerationParams }) {
     profileFor(catalog, params.model.kind, params.model.name)?.profile
       .promptStyle.language === "multilingual";
   const tooLong = text.length > MAX_TRANSLATE_INPUT_CHARS;
-  const blocked =
-    status && !status.ready && status.reason && status.reason !== "error"
-      ? status.reason
-      : null;
+  // ボタンごとの無効理由(docs/34 §9.1)
+  const blockedReason = (m: TranslateMode) => {
+    const r = status?.[m];
+    return r && !r.ready && r.reason && r.reason !== "error" ? r.reason : null;
+  };
+  const blockedPlain = blockedReason("plain");
+  const blockedPolish = blockedReason("polish");
+  // 外部へ送るのは、Anthropic のプロバイダを使うとき(翻訳専用モデルの [翻訳のみ] はローカルのみ)
+  const sendsToAnthropic = (m: TranslateMode) =>
+    status?.provider === "anthropic" &&
+    !(m === "plain" && status.mtModel === "dedicated");
 
-  async function run() {
+  async function run(kind: TranslateMode) {
     const input = text.trim();
     if (input === "" || tooLong || running) return;
+    if ((kind === "plain" ? blockedPlain : blockedPolish) !== null) return;
     const id = crypto.randomUUID();
     setRequestId(id);
+    setRunningMode(kind);
     try {
-      const result = await translateRun(id, input, {
+      const { text: result, notice } = await translateRun(id, input, kind, {
         kind: params.model.kind,
         familyId,
         reference: params.reference?.enabled === true,
@@ -110,13 +121,20 @@ export function TranslateBox({ params }: { params: GenerationParams }) {
       useFormStore
         .getState()
         .patch({ prompt: applyTranslation(previous, result, mode) });
-      toast(t("translate.done"), {
-        duration: 8000,
-        action: {
-          label: t("translate.undo"),
-          onClick: () => useFormStore.getState().patch({ prompt: previous }),
+      toast(
+        t(
+          notice === "polish_failed"
+            ? "translate.polishFailed"
+            : "translate.done",
+        ),
+        {
+          duration: 8000,
+          action: {
+            label: t("translate.undo"),
+            onClick: () => useFormStore.getState().patch({ prompt: previous }),
+          },
         },
-      });
+      );
     } catch (e) {
       const err = toAppError(e);
       // API エラーは、原因(HTTP ステータス・リクエスト ID。本文は含まない)も併せて出す
@@ -125,7 +143,10 @@ export function TranslateBox({ params }: { params: GenerationParams }) {
       toast.error(errorMessage(err) + detail);
       void useTranslateStore.getState().loadStatus();
     } finally {
-      if (mounted.current) setRequestId(null);
+      if (mounted.current) {
+        setRequestId(null);
+        setRunningMode(null);
+      }
     }
   }
 
@@ -160,7 +181,7 @@ export function TranslateBox({ params }: { params: GenerationParams }) {
               if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
                 e.preventDefault();
                 e.stopPropagation();
-                void run();
+                void run("polish");
               }
             }}
           />
@@ -198,31 +219,54 @@ export function TranslateBox({ params }: { params: GenerationParams }) {
                   {t("translate.cancel")}
                 </Button>
               )}
-              <Button
-                type="button"
-                size="xs"
-                disabled={
-                  running || text.trim() === "" || tooLong || blocked !== null
-                }
-                onClick={() => void run()}
-              >
-                {running ? t("translate.running") : t("translate.run")}
-              </Button>
+              {(["plain", "polish"] as const).map((m) => (
+                <Button
+                  key={m}
+                  type="button"
+                  size="xs"
+                  variant={m === "polish" ? "default" : "outline"}
+                  disabled={
+                    running ||
+                    text.trim() === "" ||
+                    tooLong ||
+                    (m === "plain" ? blockedPlain : blockedPolish) !== null
+                  }
+                  onClick={() => void run(m)}
+                >
+                  {runningMode === m
+                    ? t("translate.running")
+                    : t(`translate.run.${m}` as const)}
+                </Button>
+              ))}
             </div>
           </div>
-          {blocked && (
-            <p className="text-xs text-destructive">
-              {t(`translate.reason.${blocked}` as const)}
-            </p>
-          )}
+          <p className="text-xs text-muted-foreground">
+            {t("translate.run.hint")}
+          </p>
+          {(["plain", "polish"] as const).map((m) => {
+            const reason = m === "plain" ? blockedPlain : blockedPolish;
+            return (
+              reason && (
+                <p key={m} className="text-xs text-destructive">
+                  {t(`translate.reason.${m}` as const)}:{" "}
+                  {t(`translate.reason.${reason}` as const)}
+                </p>
+              )
+            );
+          })}
           {keepsJapanese && (
             <p className="text-xs text-muted-foreground">
               {t("translate.keepJa")}
             </p>
           )}
+          {status?.mtModel === "dedicated" && (
+            <p className="text-xs text-muted-foreground">
+              {t("translate.mtNote")}
+            </p>
+          )}
           {status && (
             <p className="text-xs text-muted-foreground">
-              {status.provider === "anthropic"
+              {sendsToAnthropic("plain") || sendsToAnthropic("polish")
                 ? t("translate.cost")
                 : t("translate.local")}
             </p>
