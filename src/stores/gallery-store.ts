@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { pickAfterRemoval } from "@/lib/viewer-nav";
 import { type AppError, toAppError } from "@/lib/tauri/errors";
 import { scopeMatches } from "@/lib/projects/scope";
-import { imageDelete, imageList, type ImageScopeArg, imageMove, imageSetFavorite } from "@/lib/tauri/images";
+import { imageDelete, imageDeleteNonFavorite, imageList, type ImageScopeArg, imageMove, imageSetFavorite } from "@/lib/tauri/images";
 import type { ImageItem } from "@/lib/tauri/jobs";
 
 const PAGE_SIZE = 60;
@@ -49,6 +49,8 @@ interface GalleryState {
   setFavorite: (id: string, value: boolean) => Promise<void>;
   setFavoriteMany: (ids: string[], value: boolean) => Promise<void>;
   remove: (ids: string[], deleteFiles: boolean) => Promise<void>;
+  /** 現在のスコープのお気に入り以外をすべて削除し、一覧を読み込み直す(docs/49)。失敗時は `AppError` を throw する。 */
+  removeNonFavorites: (expectedCount: number) => Promise<{ deleted: number; failed: number }>;
   /** 選んだ画像を別のプロジェクトへ移す(null = 未分類)。失敗時は `AppError` を throw する。 */
   moveToProject: (ids: string[], projectId: string | null) => Promise<void>;
 }
@@ -215,6 +217,13 @@ export const useGalleryStore = create<GalleryState>((set, get) => ({
     await imageMove(ids, projectId);
     // 通知(`image://moved`)でも反映されるが、重複しても結果は同じ
     get().applyMoved(ids, projectId);
+  },
+
+  removeNonFavorites: async (expectedCount) => {
+    const result = await imageDeleteNonFavorite(expectedCount, get().scope);
+    get().clearSelection();
+    await get().reload();
+    return result;
   },
 
   remove: async (ids, deleteFiles) => {

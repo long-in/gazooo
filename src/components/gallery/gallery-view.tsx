@@ -18,6 +18,7 @@ import { useProjectStore } from "@/stores/project-store";
 import { useUiStore } from "@/stores/ui-store";
 
 import { DeleteConfirm } from "./delete-confirm";
+import { DeleteNonFavorites } from "./delete-non-favorites";
 import { GalleryGrid } from "./gallery-grid";
 import { GalleryScopePanel } from "./gallery-scope-panel";
 import { GalleryViewer } from "./gallery-viewer";
@@ -172,6 +173,7 @@ export function GalleryView() {
             </Button>
           ))}
         </div>
+        <DeleteNonFavorites scopeName={heading.name} searching={text.trim() !== ""} favoritesScope={activeScope === "favorites"} />
       </div>
 
       {!viewerMode && selected.size > 0 && (
@@ -229,6 +231,7 @@ export function GalleryView() {
           onLoadMore={() => void loadMore()}
           onOpen={open}
           onToggleFavorite={(img) => void bulk(() => setFavorite(img.id, !img.isFavorite))}
+          onSetFavorite={(img, value) => void bulk(() => setFavorite(img.id, value))}
           onDelete={setViewerDeleteId}
           showProject={showProject}
           onOpenProject={openProject}

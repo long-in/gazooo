@@ -48,6 +48,21 @@ describe("viewerKeyAction", () => {
     expect(viewerKeyAction({ key: "Enter", isComposing: true })).toBeNull();
     expect(viewerKeyAction({ key: "ArrowRight", ctrlKey: true })).toBeNull();
   });
+  it("maps modifier shortcuts per OS", () => {
+    expect(viewerKeyAction({ key: "g", metaKey: true }, true)).toBe("favoriteOn");
+    expect(viewerKeyAction({ key: "c", metaKey: true }, true)).toBe("favoriteOff");
+    expect(viewerKeyAction({ key: "Backspace", metaKey: true }, true)).toBe("delete");
+    expect(viewerKeyAction({ key: "g", ctrlKey: true }, false)).toBe("favoriteOn");
+    expect(viewerKeyAction({ key: "c", ctrlKey: true }, false)).toBe("favoriteOff");
+    expect(viewerKeyAction({ key: "Backspace", ctrlKey: true }, false)).toBe("delete");
+  });
+  it("ignores the other OS modifier, extra modifiers and IME", () => {
+    expect(viewerKeyAction({ key: "g", ctrlKey: true }, true)).toBeNull();
+    expect(viewerKeyAction({ key: "g", metaKey: true }, false)).toBeNull();
+    expect(viewerKeyAction({ key: "g", metaKey: true, shiftKey: true }, true)).toBeNull();
+    expect(viewerKeyAction({ key: "c", ctrlKey: true, altKey: true }, false)).toBeNull();
+    expect(viewerKeyAction({ key: "g", metaKey: true, isComposing: true }, true)).toBeNull();
+  });
 });
 
 describe("isTypingTarget", () => {

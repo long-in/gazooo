@@ -1,5 +1,7 @@
 "use client";
 
+import { useRef } from "react";
+
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -25,9 +27,17 @@ export function DeleteConfirm({
   onConfirm: () => void;
 }) {
   const t = useT();
+  const actionRef = useRef<HTMLButtonElement>(null);
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
+      {/* 初期フォーカスを [削除] に置き、Enter で確定できるようにする(docs/37 §10.2)。
+          開くキーの押しっぱなし(repeat)で即確定しないよう、リピートの Enter は無視する。 */}
+      <AlertDialogContent
+        initialFocus={actionRef}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && e.repeat) e.preventDefault();
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>
             {t("gallery.deleteTitle")}
@@ -37,7 +47,7 @@ export function DeleteConfirm({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{t("gallery.deleteCancel")}</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={onConfirm}>
+          <AlertDialogAction ref={actionRef} variant="destructive" onClick={onConfirm}>
             {t("gallery.deleteConfirm")}
           </AlertDialogAction>
         </AlertDialogFooter>
