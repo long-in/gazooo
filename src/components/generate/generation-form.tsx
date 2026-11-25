@@ -373,6 +373,9 @@ export function GenerationForm() {
         }
       }}
     >
+      {/* 広い画面(xl 以上)の詳細モードでは、左 = 入力・右 = 調整の 2 列にする(docs/50) */}
+      <div className={cn("flex flex-col gap-4", !simple && "xl:grid xl:grid-cols-2 xl:items-start xl:gap-6")}>
+      <div className="flex min-w-0 flex-col gap-4">
       <div role="group" aria-label={t("generate.mode.label")} className="flex gap-1 rounded-lg border p-1">
         {(["simple", "advanced"] as const).map((m) => (
           <Button
@@ -558,6 +561,8 @@ export function GenerationForm() {
         </Section>
       )}
 
+      </div>
+      <div className="flex min-w-0 flex-col gap-4">
       {simple ? (
         <SimpleSize kind={kind} locked={sizeLocked} />
       ) : (
@@ -669,6 +674,8 @@ export function GenerationForm() {
       </details>
         </Section>
       )}
+      </div>
+      </div>
 
       <div className="sticky bottom-0 -mx-1 flex items-end gap-3 border-t bg-background/95 px-1 pb-1 pt-3 backdrop-blur">
         <div className="w-24 shrink-0">

@@ -31,24 +31,26 @@ export function GenerateView() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 pb-2">
-        <EngineBanner />
-        <ProjectSwitcher />
-        {lg ? (
-          <div className="grid min-h-0 flex-1 grid-cols-[minmax(22rem,28rem)_1fr] gap-6">
-            <div className="min-h-0 overflow-y-auto pr-2">
+      {/* スクロールは 1 本だけ(左右で別々にスクロールさせない)。広い画面では右の補助を上に固定する */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-2">
+        <div className="mx-auto flex max-w-[110rem] flex-col gap-3">
+          <EngineBanner />
+          <ProjectSwitcher />
+          {lg ? (
+            // lg: フォーム | 補助。xl: フォーム(2 列)の下に補助。2xl: フォーム(2 列)| 補助(docs/50 §2.3)
+            <div className="grid grid-cols-[minmax(24rem,36rem)_minmax(0,1fr)] items-start gap-6 xl:grid-cols-1 2xl:grid-cols-[minmax(44rem,60rem)_minmax(0,1fr)]">
               <GenerationForm />
+              <div className="sticky top-0 max-h-[calc(100vh-8rem)] overflow-y-auto xl:static xl:max-h-none xl:overflow-visible 2xl:sticky 2xl:max-h-[calc(100vh-8rem)] 2xl:overflow-y-auto">
+                <Workspace />
+              </div>
             </div>
-            <div className="min-h-0 overflow-y-auto">
+          ) : (
+            <div className="flex flex-col gap-4">
+              <GenerationForm />
               <Workspace />
             </div>
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
-            <GenerationForm />
-            <Workspace />
-          </div>
-        )}
+          )}
+        </div>
       </div>
       <LibraryStrip />
       {/* フォームの外に置く(フォームの Ctrl+Enter で生成が走らないように) */}
