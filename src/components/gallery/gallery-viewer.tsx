@@ -9,6 +9,7 @@ import { ProjectChip } from "@/components/projects/project-dot";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/lib/i18n/use-t";
 import { imageSrc } from "@/lib/image-src";
+import { detectMac, modifierLabel } from "@/lib/shortcuts";
 import { imageGet } from "@/lib/tauri/images";
 import type { ImageItem } from "@/lib/tauri/jobs";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ export function GalleryViewer({
   onLoadMore,
   onOpen,
   onToggleFavorite,
+  onSetFavorite,
   onDelete,
   showProject = false,
   onOpenProject,
@@ -40,6 +42,8 @@ export function GalleryViewer({
   onLoadMore: () => void;
   onOpen: (id: string) => void;
   onToggleFavorite: (img: ImageItem) => void;
+  /** お気に入りを指定の値にする(⌘G / ⌘C。docs/37 §10)。 */
+  onSetFavorite: (img: ImageItem, value: boolean) => void;
   onDelete: (id: string) => void;
   /** 所属プロジェクトのチップを出す(全プロジェクト横断の表示のとき。docs/40 §5.2)。 */
   showProject?: boolean;
@@ -48,6 +52,8 @@ export function GalleryViewer({
   const t = useT();
   const rootRef = useRef<HTMLDivElement>(null);
   const stripRef = useRef<HTMLDivElement>(null);
+  const isMac = detectMac();
+  const mod = modifierLabel(isMac);
 
   const index = Math.max(
     0,
@@ -129,11 +135,18 @@ export function GalleryViewer({
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      const action = viewerKeyAction(e.nativeEvent);
+      const action = viewerKeyAction(e.nativeEvent, isMac);
       if (!action || !current || isTypingTarget(e.target as Element)) return;
+      // テキスト選択中の ⌘C / Ctrl+C は OS のコピーに任せる(docs/37 §10.1)
+      if (action === "favoriteOff" && (window.getSelection()?.toString() ?? "") !== "") return;
       e.preventDefault();
       if (action === "open") onOpen(current.id);
       else if (action === "favorite") onToggleFavorite(current);
+      else if (action === "favoriteOn") {
+        if (!current.isFavorite) onSetFavorite(current, true);
+      } else if (action === "favoriteOff") {
+        if (current.isFavorite) onSetFavorite(current, false);
+      }
       else if (action === "delete") onDelete(current.id);
       else {
         const next = moveViewer(
@@ -144,7 +157,7 @@ export function GalleryViewer({
         if (next) onSelect(next);
       }
     },
-    [current, items, onOpen, onSelect, onToggleFavorite, onDelete],
+    [current, items, isMac, onOpen, onSelect, onToggleFavorite, onSetFavorite, onDelete],
   );
 
   // 開いた時点でフォーカスをメイン領域に置く(← → がそのまま効く)
@@ -197,6 +210,7 @@ export function GalleryViewer({
           variant="ghost"
           size="icon-sm"
           aria-label={current.isFavorite ? t("gallery.unfavorite") : t("gallery.favorite")}
+          title={current.isFavorite ? `${t("gallery.unfavorite")} (${mod}C)` : `${t("gallery.favorite")} (${mod}G)`}
           aria-pressed={current.isFavorite}
           onClick={() => onToggleFavorite(current)}
         >
@@ -208,6 +222,7 @@ export function GalleryViewer({
           size="icon-sm"
           className="text-destructive"
           aria-label={t("gallery.delete")}
+          title={`${t("gallery.delete")} (${mod}${isMac ? "⌫" : "Backspace"})`}
           onClick={() => onDelete(current.id)}
         >
           <Trash2 />

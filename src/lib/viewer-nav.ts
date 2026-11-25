@@ -26,16 +26,45 @@ export function pickAfterRemoval(before: string[], after: string[], current: str
 }
 
 /** キー入力をビューアの操作に対応づける。対象外・無効な状況は null。 */
-export type ViewerKeyAction = ViewerMove | "open" | "favorite" | "delete";
+export type ViewerKeyAction = ViewerMove | "open" | "favorite" | "favoriteOn" | "favoriteOff" | "delete";
 
-export function viewerKeyAction(e: {
-  key: string;
-  isComposing?: boolean;
-  ctrlKey?: boolean;
-  metaKey?: boolean;
-  altKey?: boolean;
-}): ViewerKeyAction | null {
-  if (e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return null;
+/**
+ * 修飾キー付きのショートカット(docs/37 §10)。macOS は ⌘ のみ、それ以外は Ctrl のみを受け付ける。
+ * G = お気に入りに設定、C = 解除、Backspace = 削除。
+ */
+function modifiedAction(
+  e: { key: string; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; shiftKey?: boolean },
+  isMac: boolean,
+): ViewerKeyAction | null {
+  const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+  if (!mod || e.altKey || e.shiftKey) return null;
+  switch (e.key) {
+    case "g":
+    case "G":
+      return "favoriteOn";
+    case "c":
+    case "C":
+      return "favoriteOff";
+    case "Backspace":
+      return "delete";
+    default:
+      return null;
+  }
+}
+
+export function viewerKeyAction(
+  e: {
+    key: string;
+    isComposing?: boolean;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    altKey?: boolean;
+    shiftKey?: boolean;
+  },
+  isMac = false,
+): ViewerKeyAction | null {
+  if (e.isComposing) return null;
+  if (e.ctrlKey || e.metaKey || e.altKey) return modifiedAction(e, isMac);
   switch (e.key) {
     case "ArrowRight":
       return "next";

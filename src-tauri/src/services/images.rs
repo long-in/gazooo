@@ -20,6 +20,8 @@ pub const DEFAULT_PAGE_SIZE: u32 = 60;
 pub const MAX_PAGE_SIZE: u32 = 200;
 /// 一度に移動できる画像数の上限(docs/40 §7)。
 pub const MAX_MOVE_IDS: usize = 500;
+/// お気に入り以外の一括削除で、1 回に処理する件数(docs/49 §5)。
+const DELETE_BATCH: i64 = 500;
 /// 一括ダウンロードで一度に保存できる画像数の上限(docs/44 §3)。
 pub const MAX_EXPORT_IDS: usize = 1000;
 const EXPORT_TMP_EXT: &str = "gazooo-tmp";
@@ -213,6 +215,21 @@ impl ImageService {
 
     /// 記録を削除し、`delete_files` ならファイル(原寸・サムネイル)を OS のゴミ箱へ移す。
     pub async fn delete(&self, ids: Vec<String>, delete_files: bool) -> AppResult<()> {
+        let (_, failed) = self.delete_inner(ids, delete_files).await?;
+        if failed > 0 {
+            return Err(AppError::Storage(format!(
+                "{failed} 件のファイルをゴミ箱へ移動できませんでした(記録は削除済みです)"
+            )));
+        }
+        Ok(())
+    }
+
+    /// 削除の本体。`(削除した記録の数, ゴミ箱へ移せなかったファイルの数)` を返す。
+    async fn delete_inner(
+        &self,
+        ids: Vec<String>,
+        delete_files: bool,
+    ) -> AppResult<(usize, usize)> {
         let root = self.root().await?;
         let removed = self
             .db
@@ -224,7 +241,7 @@ impl ImageService {
             })
             .await?;
         if removed.is_empty() {
-            return Ok(());
+            return Ok((0, 0));
         }
 
         let mut failed = 0usize;
@@ -252,14 +269,63 @@ impl ImageService {
             }
         }
 
+        let count = removed.len();
         let ids: Vec<String> = removed.into_iter().map(|r| r.id).collect();
         self.sink.image_deleted(&ids);
-        if failed > 0 {
-            return Err(AppError::Storage(format!(
-                "{failed} 件のファイルをゴミ箱へ移動できませんでした(記録は削除済みです)"
-            )));
+        Ok((count, failed))
+    }
+
+    async fn require_scope(&self, scope: &ImageScope) -> AppResult<()> {
+        if let ImageScope::Project(id) = scope {
+            let owned = id.clone();
+            if !self
+                .db
+                .call(move |c| crate::db::projects::exists(c, &owned))
+                .await?
+            {
+                return Err(AppError::ProjectNotFound(id.clone()));
+            }
         }
         Ok(())
+    }
+
+    /// スコープ内の `(お気に入り以外の件数, お気に入りの件数)`(docs/49)。
+    pub async fn count_non_favorite(&self, scope: ImageScope) -> AppResult<(i64, i64)> {
+        self.require_scope(&scope).await?;
+        self.db
+            .call(move |c| repo::count_by_favorite(c, &scope))
+            .await
+    }
+
+    /// スコープ内のお気に入り以外をすべて削除する(ファイルはゴミ箱へ。docs/49)。
+    /// 実数が `expected` を超えていたら何も削除せず `StaleCount`。`(削除数, 失敗したファイル数)`。
+    pub async fn delete_non_favorite(
+        &self,
+        scope: ImageScope,
+        expected: i64,
+    ) -> AppResult<(usize, usize)> {
+        let (total, _) = self.count_non_favorite(scope.clone()).await?;
+        if total > expected {
+            return Err(AppError::StaleCount);
+        }
+        let (mut deleted, mut failed) = (0usize, 0usize);
+        loop {
+            let s = scope.clone();
+            let ids = self
+                .db
+                .call(move |c| repo::non_favorite_ids(c, &s, DELETE_BATCH))
+                .await?;
+            if ids.is_empty() {
+                break;
+            }
+            let (n, f) = self.delete_inner(ids, true).await?;
+            if n == 0 {
+                break; // 進まないときの無限ループ防止
+            }
+            deleted += n;
+            failed += f;
+        }
+        Ok((deleted, failed))
     }
 
     /// 原寸の画像を `dest`(保存ダイアログで選んだ絶対パス)へコピーする。
@@ -762,6 +828,84 @@ mod tests {
             1,
             "記録は消えているので通知する"
         );
+    }
+
+    #[tokio::test]
+    async fn delete_non_favorite_keeps_favorites_and_counts() {
+        let h = harness(false);
+        for (i, id) in ["a", "b", "c", "d"].iter().enumerate() {
+            add_image(&h, id, i as i64 + 1, png_bytes(8, 8)).await;
+        }
+        h.svc.set_favorite("b", true).await.unwrap();
+        h.svc.set_favorite("d", true).await.unwrap();
+
+        let (total, favs) = h.svc.count_non_favorite(ImageScope::All).await.unwrap();
+        assert_eq!((total, favs), (2, 2));
+
+        let (deleted, failed) = h.svc.delete_non_favorite(ImageScope::All, 2).await.unwrap();
+        assert_eq!((deleted, failed), (2, 0));
+        let left: Vec<String> = h
+            .svc
+            .list(None, false, ImageScope::All, None, None)
+            .await
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|i| i.id)
+            .collect();
+        assert_eq!(left.len(), 2);
+        assert!(left.contains(&"b".to_string()) && left.contains(&"d".to_string()));
+        assert_eq!(h.trash.trashed.lock().unwrap().len(), 2);
+        assert!(join_rel(&h.root, "2026/11/b.png").exists());
+    }
+
+    #[tokio::test]
+    async fn delete_non_favorite_refuses_when_count_grew() {
+        let h = harness(false);
+        add_image(&h, "a", 1, png_bytes(8, 8)).await;
+        add_image(&h, "b", 2, png_bytes(8, 8)).await;
+        let err = h
+            .svc
+            .delete_non_favorite(ImageScope::All, 1)
+            .await
+            .unwrap_err();
+        assert_eq!(err.code(), "STALE_COUNT");
+        assert_eq!(
+            h.svc.count_non_favorite(ImageScope::All).await.unwrap().0,
+            2
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_non_favorite_handles_many_batches_and_missing_files() {
+        let h = harness(false);
+        let n = (DELETE_BATCH as usize) + 7;
+        for i in 0..n {
+            add_image(&h, &format!("i{i:04}"), i as i64 + 1, png_bytes(8, 8)).await;
+        }
+        h.svc.set_favorite("i0000", true).await.unwrap();
+        std::fs::remove_file(join_rel(&h.root, "2026/11/i0001.png")).unwrap();
+        let (deleted, _) = h
+            .svc
+            .delete_non_favorite(ImageScope::All, n as i64 - 1)
+            .await
+            .unwrap();
+        assert_eq!(deleted, n - 1);
+        assert_eq!(
+            h.svc.count_non_favorite(ImageScope::All).await.unwrap(),
+            (0, 1)
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_non_favorite_rejects_unknown_project() {
+        let h = harness(false);
+        let err = h
+            .svc
+            .delete_non_favorite(ImageScope::Project("nope".into()), 0)
+            .await
+            .unwrap_err();
+        assert_eq!(err.code(), "PROJECT_NOT_FOUND");
     }
 
     #[tokio::test]

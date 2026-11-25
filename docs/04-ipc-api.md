@@ -95,6 +95,8 @@ ComfyUI のバージョンにより選択肢の形式が異なる(`[[...], {}]` 
 | `image_reveal` | `{ id }` | `void` | エクスプローラー / Finder で表示 |
 | `image_export_many` | `{ ids: string[] }` | `string \| null` | フォルダ選択ダイアログ → 選択画像の原寸を保存開始(`jobId`。キャンセルは `null`。最大 1000 枚。docs/44)。イベント `image-export://progress` `{ jobId, done, total }` / `image-export://done` `{ jobId, saved, failed, cancelled, error }` |
 | `image_export_cancel` | `{ jobId }` | `void` | 一括保存の中止 |
+| `image_count_non_favorite` | `{ scope? }` | `{ total: number; favorites: number }` | (v0.49・実装済み。docs/49)スコープ内のお気に入り以外・お気に入りの件数。確認ダイアログ用 |
+| `image_delete_non_favorite` | `{ scope?; expectedCount: number }` | `{ deleted: number; failed: number }` | (v0.49・実装済み。docs/49)スコープ内のお気に入り以外を削除(ファイルはゴミ箱へ)。実数が `expectedCount` を超えていたら何も消さず `STALE_COUNT` |
 | `image_export_open_dir` | – | `void` | 前回の一括保存の保存先を開く |
 
 ### 入力画像(v0.2、ControlNet の参照画像。設計: 10 §6)

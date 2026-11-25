@@ -88,6 +88,47 @@ pub async fn image_delete(
     images.delete(ids, delete_files).await
 }
 
+#[derive(Debug, serde::Serialize)]
+pub struct NonFavoriteCount {
+    pub total: i64,
+    pub favorites: i64,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct NonFavoriteDeleted {
+    pub deleted: usize,
+    pub failed: usize,
+}
+
+/// スコープ内のお気に入り以外・お気に入りの件数(確認ダイアログ用。docs/49)。
+#[tauri::command]
+pub async fn image_count_non_favorite(
+    images: State<'_, Arc<ImageService>>,
+    scope: Option<ScopeArg>,
+) -> AppResult<NonFavoriteCount> {
+    let scope = scope
+        .map(ScopeArg::into_scope)
+        .transpose()?
+        .unwrap_or_default();
+    let (total, favorites) = images.count_non_favorite(scope).await?;
+    Ok(NonFavoriteCount { total, favorites })
+}
+
+/// スコープ内のお気に入り以外を削除する(ファイルはゴミ箱へ。docs/49)。
+#[tauri::command]
+pub async fn image_delete_non_favorite(
+    images: State<'_, Arc<ImageService>>,
+    scope: Option<ScopeArg>,
+    expected_count: i64,
+) -> AppResult<NonFavoriteDeleted> {
+    let scope = scope
+        .map(ScopeArg::into_scope)
+        .transpose()?
+        .unwrap_or_default();
+    let (deleted, failed) = images.delete_non_favorite(scope, expected_count).await?;
+    Ok(NonFavoriteDeleted { deleted, failed })
+}
+
 #[tauri::command]
 pub async fn image_export(
     images: State<'_, Arc<ImageService>>,

@@ -305,6 +305,8 @@ pub fn run() {
             commands::images::image_get,
             commands::images::image_set_favorite,
             commands::images::image_delete,
+            commands::images::image_count_non_favorite,
+            commands::images::image_delete_non_favorite,
             commands::images::image_move,
             commands::images::image_export,
             commands::images::image_reveal,

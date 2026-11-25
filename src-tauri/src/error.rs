@@ -31,6 +31,9 @@ pub enum AppError {
     PresetNotFound(String),
     #[error("プロジェクトが見つかりません: {0}")]
     ProjectNotFound(String),
+    /// 確認時より削除対象が増えている(docs/49 §4)。何も削除しない。
+    #[error("確認後に削除対象の画像が増えました。もう一度確認してください")]
+    StaleCount,
     /// AI サポート(docs/11)。`code` は `ASSISTANT_*`。
     #[error("{message}")]
     Assistant { code: &'static str, message: String },
@@ -157,6 +160,7 @@ impl AppError {
             Self::ImageNotFound(_) => "IMAGE_NOT_FOUND",
             Self::PresetNotFound(_) => "PRESET_NOT_FOUND",
             Self::ProjectNotFound(_) => "PROJECT_NOT_FOUND",
+            Self::StaleCount => "STALE_COUNT",
             Self::Assistant { code, .. } => code,
             Self::Models { code, .. } => code,
             Self::EngineProc { code, .. } => code,

@@ -6,11 +6,13 @@ const imageList = vi.fn<(opts: Record<string, unknown>) => Promise<Page<ImageIte
 const imageSetFavorite = vi.fn<(id: string, value: boolean) => Promise<void>>();
 const imageDelete = vi.fn<(ids: string[], deleteFiles: boolean) => Promise<void>>();
 const imageMove = vi.fn<(ids: string[], projectId: string | null) => Promise<void>>();
+const imageDeleteNonFavorite = vi.fn<(n: number, scope?: unknown) => Promise<{ deleted: number; failed: number }>>();
 vi.mock("@/lib/tauri/images", () => ({
   imageMove: (ids: string[], p: string | null) => imageMove(ids, p),
   imageList: (o: Record<string, unknown>) => imageList(o),
   imageSetFavorite: (id: string, v: boolean) => imageSetFavorite(id, v),
   imageDelete: (ids: string[], d: boolean) => imageDelete(ids, d),
+  imageDeleteNonFavorite: (n: number, scope?: unknown) => imageDeleteNonFavorite(n, scope),
 }));
 
 import { useGalleryStore } from "./gallery-store";
@@ -36,6 +38,7 @@ beforeEach(() => {
   imageSetFavorite.mockReset().mockResolvedValue();
   imageDelete.mockReset().mockResolvedValue();
   imageMove.mockReset().mockResolvedValue();
+  imageDeleteNonFavorite.mockReset().mockResolvedValue({ deleted: 0, failed: 0 });
   useGalleryStore.setState({
     items: [], nextCursor: null, loading: false, loaded: false, error: null,
     query: "", favoritesOnly: false, scope: "all", selected: new Set(),
@@ -262,5 +265,31 @@ describe("gallery-store のスコープ(docs/40 §5.1)", () => {
     useGalleryStore.setState({ items: [img("a", { projectId: "p1" })], scope: { projectId: "p1" } });
     await expect(useGalleryStore.getState().moveToProject(["a"], null)).rejects.toThrow("boom");
     expect(useGalleryStore.getState().items).toHaveLength(1);
+  });
+});
+
+describe("removeNonFavorites (docs/49)", () => {
+  it("現在のスコープと件数で IPC を呼び、選択を解除して読み込み直す", async () => {
+    imageDeleteNonFavorite.mockResolvedValue({ deleted: 2, failed: 0 });
+    imageList.mockResolvedValue(page(["fav"]));
+    useGalleryStore.setState({
+      items: [img("a"), img("fav", { isFavorite: true })],
+      scope: { projectId: "p1" },
+      selected: new Set(["a"]),
+    });
+    const r = await useGalleryStore.getState().removeNonFavorites(2);
+    expect(r).toEqual({ deleted: 2, failed: 0 });
+    expect(imageDeleteNonFavorite).toHaveBeenCalledWith(2, { projectId: "p1" });
+    expect(useGalleryStore.getState().selected.size).toBe(0);
+    expect(useGalleryStore.getState().items.map((i) => i.id)).toEqual(["fav"]);
+  });
+
+  it("STALE_COUNT のときは一覧も選択も変えずに throw する", async () => {
+    imageDeleteNonFavorite.mockRejectedValue({ code: "STALE_COUNT", message: "x" });
+    useGalleryStore.setState({ items: [img("a")], selected: new Set(["a"]) });
+    await expect(useGalleryStore.getState().removeNonFavorites(1)).rejects.toMatchObject({ code: "STALE_COUNT" });
+    expect(useGalleryStore.getState().items).toHaveLength(1);
+    expect(useGalleryStore.getState().selected.size).toBe(1);
+    expect(imageList).not.toHaveBeenCalled();
   });
 });

@@ -162,6 +162,44 @@ pub fn delete(conn: &mut Connection, ids: &[String]) -> AppResult<usize> {
     Ok(n)
 }
 
+/// スコープの条件(`images` への `WHERE` 追記分と引数)。
+fn scope_clause(scope: &ImageScope) -> (&'static str, Vec<Value>) {
+    match scope {
+        ImageScope::All => ("", vec![]),
+        ImageScope::Unassigned => (" AND images.project_id IS NULL", vec![]),
+        ImageScope::Project(id) => (" AND images.project_id = ?", vec![Value::Text(id.clone())]),
+    }
+}
+
+/// スコープ内の `(お気に入り以外の件数, お気に入りの件数)`(docs/49)。
+pub fn count_by_favorite(conn: &Connection, scope: &ImageScope) -> AppResult<(i64, i64)> {
+    let (clause, args) = scope_clause(scope);
+    let sql = format!(
+        "SELECT COALESCE(SUM(CASE WHEN is_favorite = 0 THEN 1 ELSE 0 END), 0), \
+                COALESCE(SUM(CASE WHEN is_favorite = 1 THEN 1 ELSE 0 END), 0) \
+         FROM images WHERE 1 = 1{clause}"
+    );
+    Ok(conn.query_row(&sql, params_from_iter(args), |r| Ok((r.get(0)?, r.get(1)?)))?)
+}
+
+/// スコープ内のお気に入り以外の画像 ID(古い順に最大 `limit` 件)。
+pub fn non_favorite_ids(
+    conn: &Connection,
+    scope: &ImageScope,
+    limit: i64,
+) -> AppResult<Vec<String>> {
+    let (clause, mut args) = scope_clause(scope);
+    let sql = format!(
+        "SELECT id FROM images WHERE is_favorite = 0{clause} ORDER BY created_at ASC, id ASC LIMIT ?"
+    );
+    args.push(Value::Integer(limit));
+    let mut stmt = conn.prepare(&sql)?;
+    let ids = stmt
+        .query_map(params_from_iter(args), |r| r.get(0))?
+        .collect::<Result<Vec<String>, _>>()?;
+    Ok(ids)
+}
+
 /// すべての画像(保存先の移動で、全ファイルを列挙するために使う)。
 pub fn all(conn: &Connection) -> AppResult<Vec<ImageRow>> {
     let mut stmt = conn.prepare(&format!(

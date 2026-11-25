@@ -28,6 +28,14 @@ export const imageSetFavorite = (id: string, value: boolean) =>
 export const imageDelete = (ids: string[], deleteFiles: boolean) =>
   invoke<void>("image_delete", { ids, deleteFiles });
 
+/** スコープ内のお気に入り以外・お気に入りの件数(docs/49。確認ダイアログ用)。 */
+export const imageCountNonFavorite = (scope?: ImageScopeArg) =>
+  invoke<{ total: number; favorites: number }>("image_count_non_favorite", { scope });
+
+/** スコープ内のお気に入り以外を削除(ファイルはゴミ箱へ)。実数が `expectedCount` を超えると `STALE_COUNT`。 */
+export const imageDeleteNonFavorite = (expectedCount: number, scope?: ImageScopeArg) =>
+  invoke<{ deleted: number; failed: number }>("image_delete_non_favorite", { scope, expectedCount });
+
 export const imageExport = (id: string, destPath: string) => invoke<void>("image_export", { id, destPath });
 
 /** 一括ダウンロード(docs/44)。Rust 側でフォルダを選ばせる。キャンセルは null。進捗・結果はイベント。 */
