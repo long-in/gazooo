@@ -1,0 +1,1888 @@
+{
+  "schemaVersion": 2,
+  "families": [
+    {
+      "id": "checkpoint-sd15",
+      "category": "checkpoint",
+      "profile": {
+        "summary": {
+          "ja": "軽くて速い定番のベースモデル。ControlNet・LoRA が最も豊富",
+          "en": "The light, fast classic base model with the richest ControlNet/LoRA ecosystem"
+        },
+        "style": ["general"],
+        "bestFor": {
+          "ja": ["軽量で速い(VRAM 4GB 前後から)", "対応する ControlNet・LoRA などの資産が最も豊富", "512px 前後での素早い試作"],
+          "en": ["Lightweight and fast (from about 4GB VRAM)", "The widest ecosystem of ControlNets and LoRAs", "Quick drafts at around 512px"]
+        },
+        "weakAt": {
+          "ja": ["1024px 以上の高解像度は構図が崩れやすい", "手・文字などの細部は苦手", "アニメ・実写への特化はなく、汎用的な仕上がり"],
+          "en": ["Composition tends to break at 1024px and above", "Weak at fine details such as hands and text", "Not specialised for anime or photo styles; a general look"]
+        },
+        "promptStyle": {
+          "kind": "both",
+          "hint": {
+            "ja": "短いキーワードをカンマで区切って書く(例: a cat, sitting on a sofa, soft light)",
+            "en": "Short keywords separated by commas (e.g. a cat, sitting on a sofa, soft light)"
+          }
+        },
+        "recommended": { "steps": 20, "cfg": 7, "sampler": "euler", "scheduler": "normal", "size": { "width": 512, "height": 512 } },
+        "resources": { "vramGb": 4, "speed": "fast" },
+        "moderation": {
+          "level": "unknown",
+          "note": {
+            "ja": "配布元の説明で規制の強さを確認できていない",
+            "en": "The distributor's description does not state how strongly the model is restricted"
+          }
+        },
+        "sourceNote": {
+          "ja": "配布元(stable-diffusion-v1-5)の説明に基づく目安",
+          "en": "A guideline based on the distributor's description (stable-diffusion-v1-5)"
+        }
+      },
+      "name": {
+        "ja": "Stable Diffusion 1.5",
+        "en": "Stable Diffusion 1.5"
+      },
+      "description": {
+        "ja": "SD 1.5 のベースモデル(約 4.3GB)。軽く、対応する ControlNet・LoRA が最も豊富です。",
+        "en": "The SD 1.5 base model (~4.3GB). Lightweight, with the widest ecosystem of ControlNets and LoRAs."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "variants": [
+        {
+          "id": "sd15-emaonly",
+          "label": {
+            "ja": "SD1.5 / EMA のみ(推奨)",
+            "en": "SD1.5 / EMA only (recommended)"
+          },
+          "baseModel": "sd15",
+          "precision": "fp16",
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/451f4fe16113bff5a5d2269ed5ad43b0592e9a14/v1-5-pruned-emaonly.safetensors",
+            "repo": "stable-diffusion-v1-5/stable-diffusion-v1-5"
+          },
+          "sizeBytes": 4265146304,
+          "sha256": "6ce0161689b3853acaa03779ec93eafe75a02f4ced659bee03f50797806fa2fa",
+          "destDir": "checkpoints",
+          "fileName": "v1-5-pruned-emaonly.safetensors",
+          "license": {
+            "name": "CreativeML OpenRAIL-M",
+            "url": "https://huggingface.co/spaces/CompVis/stable-diffusion-license",
+            "commercialUse": "see-license"
+          },
+          "requiresConsent": true
+        }
+      ]
+    },
+    {
+      "id": "checkpoint-sdxl",
+      "category": "checkpoint",
+      "profile": {
+        "summary": {
+          "ja": "1024px 前後の高解像度に向く、標準の汎用モデル",
+          "en": "The standard general-purpose model for high resolution around 1024px"
+        },
+        "style": ["general"],
+        "bestFor": {
+          "ja": ["1024px 前後で自然な構図・色", "SD 1.5 より構図と細部が安定", "顔補正・ControlNet・Inpaint に対応"],
+          "en": ["Natural composition and colour around 1024px", "More stable composition and detail than SD 1.5", "Works with face fix, ControlNet and Inpaint"]
+        },
+        "weakAt": {
+          "ja": ["SD 1.5 より重く遅い(VRAM 8GB 前後から)", "アニメ・特定の画風は特化モデルに劣る", "手・文字は苦手"],
+          "en": ["Heavier and slower than SD 1.5 (from about 8GB VRAM)", "Behind specialised models for anime or a specific art style", "Weak at hands and text"]
+        },
+        "promptStyle": {
+          "kind": "both",
+          "hint": {
+            "ja": "キーワードの列挙でも短い文章でもよい(例: a quiet street at dusk, cinematic lighting)",
+            "en": "Keyword lists or short sentences both work (e.g. a quiet street at dusk, cinematic lighting)"
+          }
+        },
+        "recommended": { "steps": 25, "cfg": 6.5, "sampler": "dpmpp_2m", "scheduler": "karras", "size": { "width": 1024, "height": 1024 } },
+        "resources": { "vramGb": 8, "speed": "medium" },
+        "moderation": {
+          "level": "unknown",
+          "note": {
+            "ja": "配布元の説明で規制の強さを確認できていない",
+            "en": "The distributor's description does not state how strongly the model is restricted"
+          }
+        },
+        "sourceNote": {
+          "ja": "配布元(stabilityai)の説明に基づく目安",
+          "en": "A guideline based on the distributor's description (stabilityai)"
+        }
+      },
+      "name": {
+        "ja": "Stable Diffusion XL",
+        "en": "Stable Diffusion XL"
+      },
+      "description": {
+        "ja": "SDXL のベースモデル(約 6.9GB)。高解像度(1024px 前後)向けです。",
+        "en": "The SDXL base model (~6.9GB), for high resolution (around 1024px)."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "variants": [
+        {
+          "id": "sdxl-base-1.0",
+          "label": {
+            "ja": "SDXL base 1.0(推奨)",
+            "en": "SDXL base 1.0 (recommended)"
+          },
+          "baseModel": "sdxl",
+          "precision": "fp16",
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/462165984030d82259a11f4367a4eed129e94a7b/sd_xl_base_1.0.safetensors",
+            "repo": "stabilityai/stable-diffusion-xl-base-1.0"
+          },
+          "sizeBytes": 6938078334,
+          "sha256": "31e35c80fc4829d14f90153f4c74cd59c90b779f6afe05a74cd6120b893f7e5b",
+          "destDir": "checkpoints",
+          "fileName": "sd_xl_base_1.0.safetensors",
+          "license": {
+            "name": "CreativeML OpenRAIL++-M",
+            "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md",
+            "commercialUse": "see-license"
+          },
+          "requiresConsent": true
+        }
+      ]
+    },
+    {
+      "id": "checkpoint-noobai-xl",
+      "category": "checkpoint",
+      "tags": ["anime"],
+      "name": {
+        "ja": "NoobAI-XL(アニメ・イラスト)",
+        "en": "NoobAI-XL (anime & illustration)"
+      },
+      "description": {
+        "ja": "Danbooru・e621 の全量で学習したアニメ・イラスト特化の SDXL(約 7.1GB)。キャラクターや画風をタグで細かく指定できます。",
+        "en": "An anime/illustration SDXL (~7.1GB) trained on the full Danbooru and e621 data. Characters and styles are specified by tags."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "profile": {
+        "summary": {
+          "ja": "Danbooru・e621 タグで学習したアニメ・イラスト特化の SDXL",
+          "en": "An anime/illustration SDXL trained on Danbooru and e621 tags"
+        },
+        "style": ["anime", "illustration"],
+        "bestFor": {
+          "ja": ["Danbooru タグでキャラクター・画風・構図を細かく指定できる", "キャラクターや画風の知識が広い(最新の Danbooru・e621 で学習)", "幅広い内容をタグ(rating 系を含む)で制御できる"],
+          "en": ["Fine control of characters, style and composition via Danbooru tags", "Broad knowledge of characters and styles (trained on recent Danbooru and e621)", "A wide range of content controlled with tags (including rating tags)"]
+        },
+        "weakAt": {
+          "ja": ["自然な文章での指示は不向き(タグ形式で書く)", "実写・リアル調には向かない", "際どい表現を避けたいときは、ネガティブに nsfw を入れる必要がある"],
+          "en": ["Not suited to sentence-style prompts (write tags)", "Not for photorealistic styles", "Put nsfw in the negative prompt if you want to avoid explicit content"]
+        },
+        "promptStyle": {
+          "kind": "tags",
+          "hint": {
+            "ja": "Danbooru タグをカンマ区切りで書く(例: 1girl, solo, masterpiece, best quality, newest, absurdres, safe)。品質タグを先頭に置く",
+            "en": "Comma-separated Danbooru tags (e.g. 1girl, solo, masterpiece, best quality, newest, absurdres, safe). Put quality tags first"
+          }
+        },
+        "recommended": { "steps": 28, "cfg": 5.5, "sampler": "euler_ancestral", "scheduler": "normal", "size": { "width": 832, "height": 1216 } },
+        "resources": { "vramGb": 8, "speed": "medium" },
+        "moderation": {
+          "level": "loose",
+          "note": {
+            "ja": "Danbooru・e621 の全量で学習しており、際どい表現を含む幅広い表現を出せる(制御はタグで行う)",
+            "en": "Trained on the full Danbooru and e621 data, so it can produce a wide range of expressions; control is done with tags"
+          }
+        },
+        "sourceNote": {
+          "ja": "配布元(Laxhar/noobai-XL-1.1)の説明に基づく目安",
+          "en": "A guideline based on the distributor's description (Laxhar/noobai-XL-1.1)"
+        }
+      },
+      "variants": [
+        {
+          "id": "noobai-xl-v1.1",
+          "label": {
+            "ja": "NoobAI-XL v1.1(推奨)",
+            "en": "NoobAI-XL v1.1 (recommended)"
+          },
+          "baseModel": "sdxl",
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/Laxhar/noobai-XL-1.1/resolve/814a274af2b8097c0828819d561ec74c7d0c6cea/NoobAI-XL-v1.1.safetensors",
+            "repo": "Laxhar/noobai-XL-1.1"
+          },
+          "sizeBytes": 7105349958,
+          "sha256": "6681e8e4b134c81f16533acedb0d406d7e5e366e1624b4105178c64d00b05d51",
+          "destDir": "checkpoints",
+          "fileName": "NoobAI-XL-v1.1.safetensors",
+          "license": {
+            "name": "Fair AI Public License 1.0-SD(+ 配布元の追加条件)",
+            "url": "https://freedevproject.org/faipl-1.0-sd/",
+            "commercialUse": false
+          },
+          "requiresConsent": true,
+          "note": {
+            "ja": "ライセンスは Illustrious-XL の条件を継承し、有害・違法な利用の禁止と、派生モデルを公開する場合の条件が加わります。配布元の README を確認してください。",
+            "en": "The license inherits Illustrious-XL's terms and adds a ban on harmful or illegal use and conditions for publishing derivative models. Please read the distributor's README."
+          }
+        }
+      ]
+    },
+    {
+      "id": "checkpoint-animagine-xl-4",
+      "category": "checkpoint",
+      "tags": ["anime"],
+      "name": {
+        "ja": "Animagine XL 4.0(アニメ・イラスト)",
+        "en": "Animagine XL 4.0 (anime & illustration)"
+      },
+      "description": {
+        "ja": "約 840 万枚のアニメ画像で学習したアニメ特化の SDXL(約 6.9GB)。人物・作品名・画風をタグの順序で指定し、rating タグ(safe / sensitive / nsfw / explicit)で表現の強さを選べます。",
+        "en": "An anime-focused SDXL (~6.9GB) trained on about 8.4M anime images. Specify character, series and style by tag order, and choose the rating with tags (safe / sensitive / nsfw / explicit)."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "profile": {
+        "summary": {
+          "ja": "アニメ特化の SDXL。タグの順序で人物・作品・画風を指定し、rating タグで表現の強さを選ぶ",
+          "en": "An anime-focused SDXL: specify character, series and style by tag order, and pick the rating with tags"
+        },
+        "style": ["anime", "illustration"],
+        "bestFor": {
+          "ja": ["キャラクター・作品名をタグで指定しやすい(約 840 万枚で学習)", "Opt 版は安定性・解剖・色が改善されている", "rating タグ(safe / sensitive / nsfw / explicit)で表現の強さを指定できる"],
+          "en": ["Easy to specify characters and series by tag (trained on ~8.4M images)", "The Opt version improves stability, anatomy and colour", "Rating tags (safe / sensitive / nsfw / explicit) control how explicit the result is"]
+        },
+        "weakAt": {
+          "ja": ["自然な文章での指示は不向き(タグ形式で書く)", "実写・リアル調には向かない", "品質タグ(masterpiece, high score, great score, absurdres)を末尾に付ける書き方が前提"],
+          "en": ["Not suited to sentence-style prompts (write tags)", "Not for photorealistic styles", "Assumes quality tags (masterpiece, high score, great score, absurdres) at the end of the prompt"]
+        },
+        "promptStyle": {
+          "kind": "tags",
+          "hint": {
+            "ja": "1girl, キャラ名, 作品名, rating, その他のタグ, masterpiece, high score, great score, absurdres の順にカンマ区切りで書く",
+            "en": "Comma-separated in this order: 1girl, character, series, rating, other tags, masterpiece, high score, great score, absurdres"
+          }
+        },
+        "recommended": { "steps": 28, "cfg": 5, "sampler": "euler_ancestral", "scheduler": "normal", "size": { "width": 832, "height": 1216 } },
+        "resources": { "vramGb": 8, "speed": "medium" },
+        "moderation": {
+          "level": "moderate",
+          "note": {
+            "ja": "rating タグ(safe / sensitive / nsfw / explicit)で表現の強さを選べる。既定は穏やか",
+            "en": "Rating tags (safe / sensitive / nsfw / explicit) choose how explicit the result is; the default is mild"
+          }
+        },
+        "sourceNote": {
+          "ja": "配布元(cagliostrolab/animagine-xl-4.0)の説明に基づく目安",
+          "en": "A guideline based on the distributor's description (cagliostrolab/animagine-xl-4.0)"
+        }
+      },
+      "variants": [
+        {
+          "id": "animagine-xl-4.0-opt",
+          "label": {
+            "ja": "4.0 Opt(最適化版・推奨)",
+            "en": "4.0 Opt (optimized, recommended)"
+          },
+          "baseModel": "sdxl",
+          "precision": "fp16",
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/cagliostrolab/animagine-xl-4.0/resolve/2b7c1b397761bf5bd3cc42e5b39ec99314a75a96/animagine-xl-4.0-opt.safetensors",
+            "repo": "cagliostrolab/animagine-xl-4.0"
+          },
+          "sizeBytes": 6938350040,
+          "sha256": "6327eca98bfb6538dd7a4edce22484a1bbc57a8cff6b11d075d40da1afb847ac",
+          "destDir": "checkpoints",
+          "fileName": "animagine-xl-4.0-opt.safetensors",
+          "license": {
+            "name": "CreativeML OpenRAIL++-M",
+            "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md",
+            "commercialUse": "see-license"
+          },
+          "requiresConsent": true
+        },
+        {
+          "id": "animagine-xl-4.0",
+          "label": {
+            "ja": "4.0(初版)",
+            "en": "4.0 (original)"
+          },
+          "baseModel": "sdxl",
+          "precision": "fp16",
+          "source": {
+            "url": "https://huggingface.co/cagliostrolab/animagine-xl-4.0/resolve/2b7c1b397761bf5bd3cc42e5b39ec99314a75a96/animagine-xl-4.0.safetensors",
+            "repo": "cagliostrolab/animagine-xl-4.0"
+          },
+          "sizeBytes": 6938434056,
+          "sha256": "1d5b43ff75b6ab598502d4c779d2fbfa3dceca51c60c3b609640a60772333916",
+          "destDir": "checkpoints",
+          "fileName": "animagine-xl-4.0.safetensors",
+          "license": {
+            "name": "CreativeML OpenRAIL++-M",
+            "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md",
+            "commercialUse": "see-license"
+          },
+          "requiresConsent": true
+        }
+      ]
+    },
+    {
+      "id": "controlnet-canny",
+      "category": "controlnet",
+      "name": {
+        "ja": "ControlNet — Canny(輪郭)",
+        "en": "ControlNet — Canny (edges)"
+      },
+      "description": {
+        "ja": "参照画像の輪郭線から構図を指定します。ベースモデル(SD1.5 / SDXL)と一致するものを選んでください。",
+        "en": "Guides composition from the edges of a reference image. Pick the one matching your base model (SD1.5 / SDXL)."
+      },
+      "usedBy": [
+        "controlnet"
+      ],
+      "variants": [
+        {
+          "id": "sdxl-xinsir",
+          "label": {
+            "ja": "SDXL 用 / xinsir 版(推奨)",
+            "en": "SDXL / xinsir (recommended)"
+          },
+          "baseModel": "sdxl",
+          "precision": "fp16",
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/xinsir/controlnet-canny-sdxl-1.0/resolve/1271357eda52d54b857c650cacb5b51144643ccb/diffusion_pytorch_model.safetensors",
+            "repo": "xinsir/controlnet-canny-sdxl-1.0"
+          },
+          "sizeBytes": 2502139104,
+          "sha256": "bf47cd757ceaf2572c53321329ef819ea38c09a6e3783588387913cd94dff47c",
+          "destDir": "controlnet",
+          "fileName": "controlnet-canny-sdxl-xinsir.safetensors",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false
+        },
+        {
+          "id": "sdxl-diffusers",
+          "label": {
+            "ja": "SDXL 用 / diffusers 版",
+            "en": "SDXL / diffusers"
+          },
+          "baseModel": "sdxl",
+          "precision": "fp16",
+          "recommended": false,
+          "source": {
+            "url": "https://huggingface.co/diffusers/controlnet-canny-sdxl-1.0/resolve/eb115a19a10d14909256db740ed109532ab1483c/diffusion_pytorch_model.fp16.safetensors",
+            "repo": "diffusers/controlnet-canny-sdxl-1.0"
+          },
+          "sizeBytes": 2502139136,
+          "sha256": "b2e7d3921058a442cc80430d1ec8847f42599c705e2451c95e77cf4dcf8d6c25",
+          "destDir": "controlnet",
+          "fileName": "controlnet-canny-sdxl-1.0_fp16.safetensors",
+          "license": {
+            "name": "CreativeML OpenRAIL++-M",
+            "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md",
+            "commercialUse": "see-license"
+          },
+          "requiresConsent": true
+        },
+        {
+          "id": "sd15",
+          "label": {
+            "ja": "SD1.5 用(推奨)",
+            "en": "SD1.5 (recommended)"
+          },
+          "baseModel": "sd15",
+          "precision": "fp16",
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/comfyanonymous/ControlNet-v1-1_fp16_safetensors/resolve/ab830a51c5c573a5b85bfdbaa3ae0ab7e1baf5f7/control_v11p_sd15_canny_fp16.safetensors",
+            "repo": "comfyanonymous/ControlNet-v1-1_fp16_safetensors"
+          },
+          "sizeBytes": 722601100,
+          "sha256": "8932b66e15aae835b3490dbf989f56c253104cee08a88bf21283762f557c9f10",
+          "destDir": "controlnet",
+          "fileName": "control_v11p_sd15_canny_fp16.safetensors",
+          "license": {
+            "name": "OpenRAIL(出典: lllyasviel/ControlNet-v1-1)",
+            "url": "https://huggingface.co/lllyasviel/ControlNet-v1-1",
+            "commercialUse": "see-license"
+          },
+          "requiresConsent": true
+        }
+      ]
+    },
+    {
+      "id": "controlnet-depth",
+      "category": "controlnet",
+      "name": {
+        "ja": "ControlNet — Depth(深度)",
+        "en": "ControlNet — Depth"
+      },
+      "description": {
+        "ja": "参照画像の奥行きから構図を指定します。ベースモデル(SD1.5 / SDXL)と一致するものを選んでください。",
+        "en": "Guides composition from the depth of a reference image. Pick the one matching your base model (SD1.5 / SDXL)."
+      },
+      "usedBy": [
+        "controlnet"
+      ],
+      "variants": [
+        {
+          "id": "sdxl-xinsir",
+          "label": {
+            "ja": "SDXL 用 / xinsir 版(推奨)",
+            "en": "SDXL / xinsir (recommended)"
+          },
+          "baseModel": "sdxl",
+          "precision": "fp16",
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/xinsir/controlnet-depth-sdxl-1.0/resolve/961552fa2913e3aa82cdfb32cb51bf182d95207c/diffusion_pytorch_model.safetensors",
+            "repo": "xinsir/controlnet-depth-sdxl-1.0"
+          },
+          "sizeBytes": 2502139104,
+          "sha256": "ea3770af4c33ea8ba8dccc0106ec5d5c5c6e504eb382119a3ccac3c9d973d344",
+          "destDir": "controlnet",
+          "fileName": "controlnet-depth-sdxl-xinsir.safetensors",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false
+        },
+        {
+          "id": "sdxl-diffusers",
+          "label": {
+            "ja": "SDXL 用 / diffusers 版",
+            "en": "SDXL / diffusers"
+          },
+          "baseModel": "sdxl",
+          "precision": "fp16",
+          "recommended": false,
+          "source": {
+            "url": "https://huggingface.co/diffusers/controlnet-depth-sdxl-1.0/resolve/17bb97973f29801224cd66f192c5ffacf82648b4/diffusion_pytorch_model.fp16.safetensors",
+            "repo": "diffusers/controlnet-depth-sdxl-1.0"
+          },
+          "sizeBytes": 2502139134,
+          "sha256": "66a6813e6bd7270ecfe68206a59ddd605a011ae85321188376605c66e0a4f303",
+          "destDir": "controlnet",
+          "fileName": "controlnet-depth-sdxl-1.0_fp16.safetensors",
+          "license": {
+            "name": "CreativeML OpenRAIL++-M",
+            "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md",
+            "commercialUse": "see-license"
+          },
+          "requiresConsent": true
+        },
+        {
+          "id": "sd15",
+          "label": {
+            "ja": "SD1.5 用(推奨)",
+            "en": "SD1.5 (recommended)"
+          },
+          "baseModel": "sd15",
+          "precision": "fp16",
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/comfyanonymous/ControlNet-v1-1_fp16_safetensors/resolve/ab830a51c5c573a5b85bfdbaa3ae0ab7e1baf5f7/control_v11f1p_sd15_depth_fp16.safetensors",
+            "repo": "comfyanonymous/ControlNet-v1-1_fp16_safetensors"
+          },
+          "sizeBytes": 722601100,
+          "sha256": "1c4a79aa52fb63f607cb9ff479ea5aa1923b6ceb21267bd14b69bd05d7b617be",
+          "destDir": "controlnet",
+          "fileName": "control_v11f1p_sd15_depth_fp16.safetensors",
+          "license": {
+            "name": "OpenRAIL(出典: lllyasviel/ControlNet-v1-1)",
+            "url": "https://huggingface.co/lllyasviel/ControlNet-v1-1",
+            "commercialUse": "see-license"
+          },
+          "requiresConsent": true
+        }
+      ]
+    },
+    {
+      "id": "controlnet-openpose",
+      "category": "controlnet",
+      "name": {
+        "ja": "ControlNet — OpenPose(ポーズ)",
+        "en": "ControlNet — OpenPose"
+      },
+      "description": {
+        "ja": "参照画像の人物のポーズから構図を指定します。ベースモデル(SD1.5 / SDXL)と一致するものを選んでください。",
+        "en": "Guides composition from the pose of people in a reference image. Pick the one matching your base model (SD1.5 / SDXL)."
+      },
+      "usedBy": [
+        "controlnet"
+      ],
+      "variants": [
+        {
+          "id": "sdxl-xinsir",
+          "label": {
+            "ja": "SDXL 用 / xinsir 版(推奨)",
+            "en": "SDXL / xinsir (recommended)"
+          },
+          "baseModel": "sdxl",
+          "precision": "fp16",
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/xinsir/controlnet-openpose-sdxl-1.0/resolve/23f966cd5cfdd3f7729c903e243d87152162d2b7/diffusion_pytorch_model.safetensors",
+            "repo": "xinsir/controlnet-openpose-sdxl-1.0"
+          },
+          "sizeBytes": 2502139104,
+          "sha256": "b8524e557a7df60d081f5d4a0eb109967d107df217943bf88c2d99b9ebcc06c5",
+          "destDir": "controlnet",
+          "fileName": "controlnet-openpose-sdxl-xinsir.safetensors",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false
+        },
+        {
+          "id": "sdxl-thibaud",
+          "label": {
+            "ja": "SDXL 用 / thibaud 版",
+            "en": "SDXL / thibaud"
+          },
+          "baseModel": "sdxl",
+          "precision": "fp32",
+          "recommended": false,
+          "source": {
+            "url": "https://huggingface.co/thibaud/controlnet-openpose-sdxl-1.0/resolve/1db673ed3dad75181fcf2e24f827597fe34e97b7/OpenPoseXL2.safetensors",
+            "repo": "thibaud/controlnet-openpose-sdxl-1.0"
+          },
+          "sizeBytes": 5004167829,
+          "sha256": "5a4b928cb1e93748217900cb66d4135bf70d932d2924232f925910fad9e43a92",
+          "destDir": "controlnet",
+          "fileName": "controlnet-openpose-sdxl-1.0.safetensors",
+          "license": {
+            "name": "OpenRAIL++(配布元の表記に従う)",
+            "url": "https://huggingface.co/thibaud/controlnet-openpose-sdxl-1.0",
+            "commercialUse": "see-license"
+          },
+          "requiresConsent": true
+        },
+        {
+          "id": "sd15",
+          "label": {
+            "ja": "SD1.5 用(推奨)",
+            "en": "SD1.5 (recommended)"
+          },
+          "baseModel": "sd15",
+          "precision": "fp16",
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/comfyanonymous/ControlNet-v1-1_fp16_safetensors/resolve/ab830a51c5c573a5b85bfdbaa3ae0ab7e1baf5f7/control_v11p_sd15_openpose_fp16.safetensors",
+            "repo": "comfyanonymous/ControlNet-v1-1_fp16_safetensors"
+          },
+          "sizeBytes": 722601100,
+          "sha256": "4003c1da17b0e4ba444e02140e1c0d83bb24b79e4dcfd613c3a554d38f0f89c7",
+          "destDir": "controlnet",
+          "fileName": "control_v11p_sd15_openpose_fp16.safetensors",
+          "license": {
+            "name": "OpenRAIL(出典: lllyasviel/ControlNet-v1-1)",
+            "url": "https://huggingface.co/lllyasviel/ControlNet-v1-1",
+            "commercialUse": "see-license"
+          },
+          "requiresConsent": true
+        }
+      ]
+    },
+    {
+      "id": "detector-face",
+      "category": "detector",
+      "name": {
+        "ja": "顔検出モデル",
+        "en": "Face detection model"
+      },
+      "description": {
+        "ja": "顔補正で顔を見つけるためのモデルです。精度が高いほどサイズが大きくなります。",
+        "en": "Used by face fix to find faces. Higher accuracy means a larger file."
+      },
+      "usedBy": [
+        "faceDetailer"
+      ],
+      "variants": [
+        {
+          "id": "yolov9c",
+          "label": {
+            "ja": "YOLOv9c(最高精度)",
+            "en": "YOLOv9c (most accurate)"
+          },
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/Bingsu/adetailer/resolve/53cc19de382014514d9d4038601d261a7faa9b7b/face_yolov9c.pt",
+            "repo": "Bingsu/adetailer"
+          },
+          "sizeBytes": 51648019,
+          "sha256": "d02fe493c31e1bbc6450f4dc6f1db86a02a59322ff1f6d318da0661d72ddd084",
+          "destDir": "ultralytics/bbox",
+          "fileName": "face_yolov9c.pt",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false,
+          "note": {
+            "ja": "pickle 形式のファイルです。固定ハッシュと一致したものだけを配置します。",
+            "en": "A pickle-format file. Only files matching the pinned hash are placed."
+          }
+        },
+        {
+          "id": "yolov8m",
+          "label": {
+            "ja": "YOLOv8m(標準)",
+            "en": "YOLOv8m (standard)"
+          },
+          "recommended": false,
+          "source": {
+            "url": "https://huggingface.co/Bingsu/adetailer/resolve/53cc19de382014514d9d4038601d261a7faa9b7b/face_yolov8m.pt",
+            "repo": "Bingsu/adetailer"
+          },
+          "sizeBytes": 52026019,
+          "sha256": "717923c19b3f4bbf5250b728f1fa6b2cb72a33aed1d236ea9caf0e21ad943e5f",
+          "destDir": "ultralytics/bbox",
+          "fileName": "face_yolov8m.pt",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false,
+          "note": {
+            "ja": "pickle 形式のファイルです。固定ハッシュと一致したものだけを配置します。",
+            "en": "A pickle-format file. Only files matching the pinned hash are placed."
+          }
+        },
+        {
+          "id": "yolov8s",
+          "label": {
+            "ja": "YOLOv8s(軽量)",
+            "en": "YOLOv8s (light)"
+          },
+          "recommended": false,
+          "source": {
+            "url": "https://huggingface.co/Bingsu/adetailer/resolve/53cc19de382014514d9d4038601d261a7faa9b7b/face_yolov8s.pt",
+            "repo": "Bingsu/adetailer"
+          },
+          "sizeBytes": 22507707,
+          "sha256": "c7237eff25787377de196961140ceaed324d859ee8de5a775d93d33a0e3fab78",
+          "destDir": "ultralytics/bbox",
+          "fileName": "face_yolov8s.pt",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false,
+          "note": {
+            "ja": "pickle 形式のファイルです。固定ハッシュと一致したものだけを配置します。",
+            "en": "A pickle-format file. Only files matching the pinned hash are placed."
+          }
+        },
+        {
+          "id": "yolov8n-v2",
+          "label": {
+            "ja": "YOLOv8n v2(最軽量)",
+            "en": "YOLOv8n v2 (lightest)"
+          },
+          "recommended": false,
+          "source": {
+            "url": "https://huggingface.co/Bingsu/adetailer/resolve/53cc19de382014514d9d4038601d261a7faa9b7b/face_yolov8n_v2.pt",
+            "repo": "Bingsu/adetailer"
+          },
+          "sizeBytes": 6239036,
+          "sha256": "8f5f2110f83c4e00712993fab48c771d26036e2e80ec62bd5b9cb37c29e36b36",
+          "destDir": "ultralytics/bbox",
+          "fileName": "face_yolov8n_v2.pt",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false,
+          "note": {
+            "ja": "pickle 形式のファイルです。固定ハッシュと一致したものだけを配置します。",
+            "en": "A pickle-format file. Only files matching the pinned hash are placed."
+          }
+        }
+      ]
+    },
+    {
+      "id": "detector-hand",
+      "category": "detector",
+      "name": {
+        "ja": "手検出モデル",
+        "en": "Hand detection model"
+      },
+      "description": {
+        "ja": "顔補正で手を見つけるためのモデルです(顔補正の検出モデルに手のモデルを選ぶと手を補正できます)。",
+        "en": "Used by face fix to find hands (choose a hand model as the detector to fix hands)."
+      },
+      "usedBy": [
+        "faceDetailer"
+      ],
+      "variants": [
+        {
+          "id": "yolov9c",
+          "label": {
+            "ja": "YOLOv9c(最高精度)",
+            "en": "YOLOv9c (most accurate)"
+          },
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/Bingsu/adetailer/resolve/53cc19de382014514d9d4038601d261a7faa9b7b/hand_yolov9c.pt",
+            "repo": "Bingsu/adetailer"
+          },
+          "sizeBytes": 51633747,
+          "sha256": "6f116f686ef5942fa0c1d08db481b3d7622047a97847eccfb2a264f9ce9777f2",
+          "destDir": "ultralytics/bbox",
+          "fileName": "hand_yolov9c.pt",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false,
+          "note": {
+            "ja": "pickle 形式のファイルです。固定ハッシュと一致したものだけを配置します。",
+            "en": "A pickle-format file. Only files matching the pinned hash are placed."
+          }
+        },
+        {
+          "id": "yolov8s",
+          "label": {
+            "ja": "YOLOv8s(標準)",
+            "en": "YOLOv8s (standard)"
+          },
+          "recommended": false,
+          "source": {
+            "url": "https://huggingface.co/Bingsu/adetailer/resolve/53cc19de382014514d9d4038601d261a7faa9b7b/hand_yolov8s.pt",
+            "repo": "Bingsu/adetailer"
+          },
+          "sizeBytes": 22507643,
+          "sha256": "70b540063fbc385736d8258970744a4afbc4cbf7932134bae3b24cdadeadec06",
+          "destDir": "ultralytics/bbox",
+          "fileName": "hand_yolov8s.pt",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false,
+          "note": {
+            "ja": "pickle 形式のファイルです。固定ハッシュと一致したものだけを配置します。",
+            "en": "A pickle-format file. Only files matching the pinned hash are placed."
+          }
+        },
+        {
+          "id": "yolov8n",
+          "label": {
+            "ja": "YOLOv8n(最軽量)",
+            "en": "YOLOv8n (lightest)"
+          },
+          "recommended": false,
+          "source": {
+            "url": "https://huggingface.co/Bingsu/adetailer/resolve/53cc19de382014514d9d4038601d261a7faa9b7b/hand_yolov8n.pt",
+            "repo": "Bingsu/adetailer"
+          },
+          "sizeBytes": 6237883,
+          "sha256": "3991202eb69e9ddcb3b9ba80cdeb41e734ffaf844403d6c9f47d515cd88c6f29",
+          "destDir": "ultralytics/bbox",
+          "fileName": "hand_yolov8n.pt",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false,
+          "note": {
+            "ja": "pickle 形式のファイルです。固定ハッシュと一致したものだけを配置します。",
+            "en": "A pickle-format file. Only files matching the pinned hash are placed."
+          }
+        }
+      ]
+    },
+    {
+      "id": "flux-schnell-gguf",
+      "category": "flux",
+      "kind": "flux_gguf",
+      "profile": {
+        "summary": {
+          "ja": "少ないステップで速く出せる Flux。文章での指示に強い",
+          "en": "A fast Flux that needs few steps and follows sentence-style prompts well"
+        },
+        "style": ["general"],
+        "bestFor": {
+          "ja": ["1〜4 ステップ程度で速く生成できる", "文章でのプロンプトへの追従性が高い", "画像内の文字が比較的きれい"],
+          "en": ["Fast: about 1-4 steps", "Follows sentence-style prompts well", "Relatively clean text inside images"]
+        },
+        "weakAt": {
+          "ja": ["dev 版より細部・質感が劣る場合がある", "ネガティブプロンプト・顔補正・ControlNet・Inpaint は使えない", "GGUF の読み込みに ComfyUI-GGUF が必要"],
+          "en": ["Details and texture can fall short of the dev version", "No negative prompt, face fix, ControlNet or Inpaint", "Needs ComfyUI-GGUF to load GGUF files"]
+        },
+        "promptStyle": {
+          "kind": "natural",
+          "hint": {
+            "ja": "文章で具体的に書く(例: A cat sitting on a sofa by the window, soft morning light)",
+            "en": "Write concrete sentences (e.g. A cat sitting on a sofa by the window, soft morning light)"
+          }
+        },
+        "recommended": { "steps": 4, "cfg": 1, "sampler": "euler", "scheduler": "simple", "size": { "width": 1024, "height": 1024 } },
+        "resources": { "vramGb": 8, "speed": "fast" },
+        "moderation": {
+          "level": "strict",
+          "note": {
+            "ja": "配布元(Black Forest Labs)が、学習データから裸・ポルノ素材などを除外していると説明している",
+            "en": "The distributor (Black Forest Labs) states it filters nude and pornographic material from the training data"
+          }
+        },
+        "sourceNote": {
+          "ja": "配布元(city96 / black-forest-labs)の説明に基づく目安",
+          "en": "A guideline based on the distributors' descriptions (city96 / black-forest-labs)"
+        }
+      },
+      "name": {
+        "ja": "FLUX.1 schnell(GGUF)",
+        "en": "FLUX.1 schnell (GGUF)"
+      },
+      "description": {
+        "ja": "高速に生成できる Flux 本体(量子化版)。商用利用可(Apache-2.0)。Flux の生成には、この本体に加えてテキストエンコーダ 2 種(clip_l・t5xxl)と VAE が必要です。",
+        "en": "The fast Flux model (quantized). Commercial use allowed (Apache-2.0). Generating with Flux also needs two text encoders (clip_l and t5xxl) and the VAE."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "variants": [
+        {
+          "id": "q4ks",
+          "label": {
+            "ja": "Q4_K_S(軽量・推奨)",
+            "en": "Q4_K_S (light, recommended)"
+          },
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/f495746ed9c5efcf4661f53ef05401dceadc17d2/flux1-schnell-Q4_K_S.gguf",
+            "repo": "city96/FLUX.1-schnell-gguf"
+          },
+          "sizeBytes": 6783943712,
+          "sha256": "4fd16477b3a5296d0cf722c4b92a9fd7f30d09ac7495826e4465d8de9c9fd973",
+          "destDir": "unet",
+          "fileName": "flux1-schnell-Q4_K_S.gguf",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false,
+          "note": {
+            "ja": "ComfyUI-GGUF ノードが必要です(開発用 ComfyUI には導入済み)。",
+            "en": "Requires the ComfyUI-GGUF node (installed in the dev ComfyUI)."
+          }
+        },
+        {
+          "id": "q5ks",
+          "label": {
+            "ja": "Q5_K_S(バランス)",
+            "en": "Q5_K_S (balanced)"
+          },
+          "recommended": false,
+          "source": {
+            "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/f495746ed9c5efcf4661f53ef05401dceadc17d2/flux1-schnell-Q5_K_S.gguf",
+            "repo": "city96/FLUX.1-schnell-gguf"
+          },
+          "sizeBytes": 8263222304,
+          "sha256": "19f63562d9a20d2123288dddd9abb3d5560554e5694ded951aaf6bfafe46b5df",
+          "destDir": "unet",
+          "fileName": "flux1-schnell-Q5_K_S.gguf",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false,
+          "note": {
+            "ja": "ComfyUI-GGUF ノードが必要です(開発用 ComfyUI には導入済み)。",
+            "en": "Requires the ComfyUI-GGUF node (installed in the dev ComfyUI)."
+          }
+        },
+        {
+          "id": "q8",
+          "label": {
+            "ja": "Q8_0(高品質・VRAM 大)",
+            "en": "Q8_0 (high quality, needs more VRAM)"
+          },
+          "recommended": false,
+          "source": {
+            "url": "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/f495746ed9c5efcf4661f53ef05401dceadc17d2/flux1-schnell-Q8_0.gguf",
+            "repo": "city96/FLUX.1-schnell-gguf"
+          },
+          "sizeBytes": 12687821728,
+          "sha256": "f6694941193b10148dbf1f0f498d4ccd3e9875c127fc53946213b68580c66f10",
+          "destDir": "unet",
+          "fileName": "flux1-schnell-Q8_0.gguf",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false,
+          "note": {
+            "ja": "ComfyUI-GGUF ノードが必要です(開発用 ComfyUI には導入済み)。",
+            "en": "Requires the ComfyUI-GGUF node (installed in the dev ComfyUI)."
+          }
+        }
+      ]
+    },
+    {
+      "id": "flux-dev-gguf",
+      "category": "flux",
+      "kind": "flux_gguf",
+      "profile": {
+        "summary": {
+          "ja": "細部と質感に優れた高品質な Flux。schnell より時間がかかる",
+          "en": "A high-quality Flux strong in detail and texture; slower than schnell"
+        },
+        "style": ["general"],
+        "bestFor": {
+          "ja": ["細部・質感の品質が高い", "文章でのプロンプトへの追従性が高い", "画像内の文字が比較的きれい"],
+          "en": ["High quality in detail and texture", "Follows sentence-style prompts well", "Relatively clean text inside images"]
+        },
+        "weakAt": {
+          "ja": ["schnell より遅い(20 ステップ前後)", "ネガティブプロンプト・顔補正・ControlNet・Inpaint は使えない", "GGUF の読み込みに ComfyUI-GGUF が必要"],
+          "en": ["Slower than schnell (around 20 steps)", "No negative prompt, face fix, ControlNet or Inpaint", "Needs ComfyUI-GGUF to load GGUF files"]
+        },
+        "promptStyle": {
+          "kind": "natural",
+          "hint": {
+            "ja": "文章で具体的に書く(例: A cat sitting on a sofa by the window, soft morning light)",
+            "en": "Write concrete sentences (e.g. A cat sitting on a sofa by the window, soft morning light)"
+          }
+        },
+        "recommended": { "steps": 20, "cfg": 1, "sampler": "euler", "scheduler": "simple", "size": { "width": 1024, "height": 1024 } },
+        "resources": { "vramGb": 8, "speed": "slow" },
+        "moderation": {
+          "level": "strict",
+          "note": {
+            "ja": "配布元(Black Forest Labs)が、学習データから裸・ポルノ素材などを除外していると説明している",
+            "en": "The distributor (Black Forest Labs) states it filters nude and pornographic material from the training data"
+          }
+        },
+        "sourceNote": {
+          "ja": "配布元(city96 / black-forest-labs)の説明に基づく目安",
+          "en": "A guideline based on the distributors' descriptions (city96 / black-forest-labs)"
+        }
+      },
+      "name": {
+        "ja": "FLUX.1 dev(GGUF)",
+        "en": "FLUX.1 dev (GGUF)"
+      },
+      "description": {
+        "ja": "高品質な Flux 本体(量子化版)。非商用ライセンスです。Flux の生成には、テキストエンコーダ 2 種(clip_l・t5xxl)と VAE も必要です。",
+        "en": "The high-quality Flux model (quantized). Non-commercial license. Generating with Flux also needs two text encoders (clip_l and t5xxl) and the VAE."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "variants": [
+        {
+          "id": "q4ks",
+          "label": {
+            "ja": "Q4_K_S(軽量・推奨)",
+            "en": "Q4_K_S (light, recommended)"
+          },
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/city96/FLUX.1-dev-gguf/resolve/3c60ac659f4b1f2ab3ca8bd4488272069b36a148/flux1-dev-Q4_K_S.gguf",
+            "repo": "city96/FLUX.1-dev-gguf"
+          },
+          "sizeBytes": 6805988640,
+          "sha256": "75bb19459b5240c9f373b5af527584af15b675867fa142efadf7478d6abbf62b",
+          "destDir": "unet",
+          "fileName": "flux1-dev-Q4_K_S.gguf",
+          "license": {
+            "name": "FLUX.1 [dev] Non-Commercial License",
+            "url": "https://huggingface.co/black-forest-labs/FLUX.1-dev/blob/main/LICENSE.md",
+            "commercialUse": false
+          },
+          "requiresConsent": true,
+          "note": {
+            "ja": "ComfyUI-GGUF ノードが必要です(開発用 ComfyUI には導入済み)。",
+            "en": "Requires the ComfyUI-GGUF node (installed in the dev ComfyUI)."
+          }
+        },
+        {
+          "id": "q5ks",
+          "label": {
+            "ja": "Q5_K_S(バランス)",
+            "en": "Q5_K_S (balanced)"
+          },
+          "recommended": false,
+          "source": {
+            "url": "https://huggingface.co/city96/FLUX.1-dev-gguf/resolve/3c60ac659f4b1f2ab3ca8bd4488272069b36a148/flux1-dev-Q5_K_S.gguf",
+            "repo": "city96/FLUX.1-dev-gguf"
+          },
+          "sizeBytes": 8285267232,
+          "sha256": "aa76146ca0f1b09c67e0c3fcef18be3a375837ecd5aaa021d3e9ebc558bd68f9",
+          "destDir": "unet",
+          "fileName": "flux1-dev-Q5_K_S.gguf",
+          "license": {
+            "name": "FLUX.1 [dev] Non-Commercial License",
+            "url": "https://huggingface.co/black-forest-labs/FLUX.1-dev/blob/main/LICENSE.md",
+            "commercialUse": false
+          },
+          "requiresConsent": true,
+          "note": {
+            "ja": "ComfyUI-GGUF ノードが必要です(開発用 ComfyUI には導入済み)。",
+            "en": "Requires the ComfyUI-GGUF node (installed in the dev ComfyUI)."
+          }
+        },
+        {
+          "id": "q8",
+          "label": {
+            "ja": "Q8_0(高品質・VRAM 大)",
+            "en": "Q8_0 (high quality, needs more VRAM)"
+          },
+          "recommended": false,
+          "source": {
+            "url": "https://huggingface.co/city96/FLUX.1-dev-gguf/resolve/3c60ac659f4b1f2ab3ca8bd4488272069b36a148/flux1-dev-Q8_0.gguf",
+            "repo": "city96/FLUX.1-dev-gguf"
+          },
+          "sizeBytes": 12708281504,
+          "sha256": "129032f32224bf7138f16e18673d8008ba5f84c1ec74063bf4511a8bb4cf553d",
+          "destDir": "unet",
+          "fileName": "flux1-dev-Q8_0.gguf",
+          "license": {
+            "name": "FLUX.1 [dev] Non-Commercial License",
+            "url": "https://huggingface.co/black-forest-labs/FLUX.1-dev/blob/main/LICENSE.md",
+            "commercialUse": false
+          },
+          "requiresConsent": true,
+          "note": {
+            "ja": "ComfyUI-GGUF ノードが必要です(開発用 ComfyUI には導入済み)。",
+            "en": "Requires the ComfyUI-GGUF node (installed in the dev ComfyUI)."
+          }
+        }
+      ]
+    },
+    {
+      "id": "flux-clip-l",
+      "category": "flux",
+      "name": {
+        "ja": "テキストエンコーダ — clip_l",
+        "en": "Text encoder — clip_l"
+      },
+      "description": {
+        "ja": "Flux に必要なテキストエンコーダ(CLIP-L)。生成画面の「テキストエンコーダ (CLIP-L)」に選びます。",
+        "en": "The CLIP-L text encoder Flux needs. Choose it as \"Text encoder (CLIP-L)\" on the generate screen."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "variants": [
+        {
+          "id": "clip-l",
+          "label": {
+            "ja": "clip_l",
+            "en": "clip_l"
+          },
+          "precision": "fp16",
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/6af2a98e3f615bdfa612fbd85da93d1ed5f69ef5/clip_l.safetensors",
+            "repo": "comfyanonymous/flux_text_encoders"
+          },
+          "sizeBytes": 246144152,
+          "sha256": "660c6f5b1abae9dc498ac2d21e1347d2abdb0cf6c0c0c8576cd796491d9a6cdd",
+          "destDir": "clip",
+          "fileName": "clip_l.safetensors",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false
+        }
+      ]
+    },
+    {
+      "id": "flux-t5xxl",
+      "category": "flux",
+      "name": {
+        "ja": "テキストエンコーダ — t5xxl",
+        "en": "Text encoder — t5xxl"
+      },
+      "description": {
+        "ja": "Flux に必要なテキストエンコーダ(T5)。生成画面の「テキストエンコーダ (T5)」に選びます。fp8 は軽量で、ほとんどの場合これで十分です。",
+        "en": "The T5 text encoder Flux needs. Choose it as \"Text encoder (T5)\" on the generate screen. fp8 is lighter and enough in most cases."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "variants": [
+        {
+          "id": "fp8",
+          "label": {
+            "ja": "fp8(軽量・推奨)",
+            "en": "fp8 (light, recommended)"
+          },
+          "precision": "fp8",
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/6af2a98e3f615bdfa612fbd85da93d1ed5f69ef5/t5xxl_fp8_e4m3fn.safetensors",
+            "repo": "comfyanonymous/flux_text_encoders"
+          },
+          "sizeBytes": 4893934904,
+          "sha256": "7d330da4816157540d6bb7838bf63a0f02f573fc48ca4d8de34bb0cbfd514f09",
+          "destDir": "clip",
+          "fileName": "t5xxl_fp8_e4m3fn.safetensors",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false
+        },
+        {
+          "id": "fp16",
+          "label": {
+            "ja": "fp16(高精度・サイズ大)",
+            "en": "fp16 (accurate, larger)"
+          },
+          "precision": "fp16",
+          "recommended": false,
+          "source": {
+            "url": "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/6af2a98e3f615bdfa612fbd85da93d1ed5f69ef5/t5xxl_fp16.safetensors",
+            "repo": "comfyanonymous/flux_text_encoders"
+          },
+          "sizeBytes": 9787841024,
+          "sha256": "6e480b09fae049a72d2a8c5fbccb8d3e92febeb233bbe9dfe7256958a9167635",
+          "destDir": "clip",
+          "fileName": "t5xxl_fp16.safetensors",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false
+        }
+      ]
+    },
+    {
+      "id": "flux-vae",
+      "category": "flux",
+      "name": {
+        "ja": "VAE — ae",
+        "en": "VAE — ae"
+      },
+      "description": {
+        "ja": "Flux に必要な VAE(画像の復号)。公式(Black Forest Labs)の ae.safetensors と同一のファイル(SHA-256 一致)を、認証不要の Comfy-Org の再配布から取得します。",
+        "en": "The VAE Flux needs (image decoding). The same file as the official Black Forest Labs ae.safetensors (identical SHA-256), fetched from Comfy-Org's ungated redistribution."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "variants": [
+        {
+          "id": "ae",
+          "label": {
+            "ja": "ae.safetensors",
+            "en": "ae.safetensors"
+          },
+          "precision": "fp16",
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/Comfy-Org/Lumina_Image_2.0_Repackaged/resolve/5b072540ef86570fecb8249c505f23d5bdeb88cd/split_files/vae/ae.safetensors",
+            "repo": "Comfy-Org/Lumina_Image_2.0_Repackaged"
+          },
+          "sizeBytes": 335304388,
+          "sha256": "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38",
+          "destDir": "vae",
+          "fileName": "ae.safetensors",
+          "license": {
+            "name": "Apache-2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0",
+            "commercialUse": true
+          },
+          "requiresConsent": false
+        }
+      ]
+    },
+    {
+      "id": "anima-base",
+      "category": "anima",
+      "kind": "anima",
+      "tags": ["anime"],
+      "name": {
+        "ja": "Anima(アニメ・イラスト特化)",
+        "en": "Anima (anime & illustration)"
+      },
+      "description": {
+        "ja": "アニメ・イラスト特化の軽量モデル(2B。本体 約 4.2GB)。Danbooru 風のタグと自然な文章の両方で指示でき、safe / sensitive / nsfw / explicit の安全タグで表現の強さを選べます。写実的な絵は苦手です。生成には、このモデルのほかにテキストエンコーダと VAE が必要です(「必要なファイルをまとめて取得」)。",
+        "en": "A lightweight anime/illustration model (2B, ~4.2GB). Accepts Danbooru-style tags and natural sentences, and the safety tags (safe / sensitive / nsfw / explicit) control how explicit the result is. Weak at realism. It also needs a text encoder and a VAE (use \"Get all required files\")."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "requires": [
+        {
+          "familyId": "anima-text-encoder",
+          "variantId": "qwen3-0.6b-base"
+        },
+        {
+          "familyId": "anima-vae",
+          "variantId": "qwen-image-vae"
+        }
+      ],
+      "profile": {
+        "summary": {
+          "ja": "アニメ・イラスト特化の軽量モデル。タグと自然文の両方で指示できる",
+          "en": "A lightweight anime/illustration model that takes tags and sentences"
+        },
+        "style": [
+          "anime",
+          "illustration"
+        ],
+        "bestFor": {
+          "ja": [
+            "Danbooru 風のタグと自然な文章の両方で指示できる",
+            "軽量(本体 4.2GB)で速い",
+            "safe / sensitive / nsfw / explicit の安全タグで表現の強さを選べる",
+            "アニメ以外のイラスト・絵画調にも対応"
+          ],
+          "en": [
+            "Takes both Danbooru-style tags and natural sentences",
+            "Lightweight (4.2GB model) and fast",
+            "Safety tags (safe / sensitive / nsfw / explicit) control how explicit the result is",
+            "Also handles non-anime illustration and painterly styles"
+          ]
+        },
+        "weakAt": {
+          "ja": [
+            "実写・写実的な絵には向かない",
+            "タグは小文字・スペース区切り(score_ 系だけアンダースコア)",
+            "アーティスト名のタグは @ を付けないと効きにくい"
+          ],
+          "en": [
+            "Not for photorealistic images",
+            "Tags are lowercase with spaces (only score_ tags use underscores)",
+            "Artist tags need a leading @ or they barely take effect"
+          ]
+        },
+        "promptStyle": {
+          "kind": "both",
+          "hint": {
+            "ja": "品質・安全タグ → 被写体(1girl など)→ キャラ・作品 → その他のタグ。自然文も可(例: masterpiece, best quality, score_7, safe, 1girl, smile)",
+            "en": "Quality/safety tags, then subject (1girl...), character/series, other tags. Sentences also work (e.g. masterpiece, best quality, score_7, safe, 1girl, smile)"
+          }
+        },
+        "recommended": {
+          "steps": 30,
+          "cfg": 4,
+          "sampler": "euler",
+          "scheduler": "simple",
+          "size": {
+            "width": 1024,
+            "height": 1024
+          }
+        },
+        "resources": {
+          "vramGb": 6,
+          "speed": "fast"
+        },
+        "moderation": {
+          "level": "loose",
+          "note": {
+            "ja": "safe / sensitive / nsfw / explicit の安全タグで表現の強さを選べ、制限は弱い",
+            "en": "Safety tags (safe / sensitive / nsfw / explicit) choose how explicit the result is; restrictions are weak"
+          }
+        },
+        "sourceNote": {
+          "ja": "配布元(circlestone-labs/Anima)の説明と、ComfyUI の公式テンプレートに基づく目安",
+          "en": "A guideline based on the distributor's description (circlestone-labs/Anima) and ComfyUI's official template"
+        }
+      },
+      "variants": [
+        {
+          "id": "anima-base-v1.0",
+          "label": {
+            "ja": "Anima Base v1.0(推奨)",
+            "en": "Anima Base v1.0 (recommended)"
+          },
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/circlestone-labs/Anima/resolve/6e0b2da2112573380abfb6a1435a60a994b254f2/split_files/diffusion_models/anima-base-v1.0.safetensors",
+            "repo": "circlestone-labs/Anima"
+          },
+          "sizeBytes": 4182218328,
+          "sha256": "bd43b7cffe1ed1153d9c41e7beb2f18cb1273eafbaa3af3edd6a173dc90a006e",
+          "destDir": "unet",
+          "fileName": "anima-base-v1.0.safetensors",
+          "license": {
+            "name": "CircleStone Labs Non-Commercial License",
+            "url": "https://huggingface.co/circlestone-labs/Anima/blob/main/LICENSE.md",
+            "commercialUse": false
+          },
+          "requiresConsent": true
+        }
+      ]
+    },
+    {
+      "id": "anima-text-encoder",
+      "category": "anima",
+      "name": {
+        "ja": "Anima — テキストエンコーダ(Qwen3 0.6B)",
+        "en": "Anima — text encoder (Qwen3 0.6B)"
+      },
+      "description": {
+        "ja": "Anima の生成に必要なテキストエンコーダ(約 1.2GB)。",
+        "en": "The text encoder Anima needs (~1.2GB)."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "variants": [
+        {
+          "id": "qwen3-0.6b-base",
+          "label": {
+            "ja": "Qwen3 0.6B base(推奨)",
+            "en": "Qwen3 0.6B base (recommended)"
+          },
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/circlestone-labs/Anima/resolve/6e0b2da2112573380abfb6a1435a60a994b254f2/split_files/text_encoders/qwen_3_06b_base.safetensors",
+            "repo": "circlestone-labs/Anima"
+          },
+          "sizeBytes": 1192135096,
+          "sha256": "cd2a512003e2f9f3cd3c32a9c3573f820bb28c940f73c57b1ddaa983d9223eba",
+          "destDir": "clip",
+          "fileName": "qwen_3_06b_base.safetensors",
+          "license": {
+            "name": "CircleStone Labs Non-Commercial License",
+            "url": "https://huggingface.co/circlestone-labs/Anima/blob/main/LICENSE.md",
+            "commercialUse": false
+          },
+          "requiresConsent": false
+        }
+      ]
+    },
+    {
+      "id": "anima-vae",
+      "category": "anima",
+      "name": {
+        "ja": "Anima — VAE(Qwen-Image VAE)",
+        "en": "Anima — VAE (Qwen-Image VAE)"
+      },
+      "description": {
+        "ja": "Anima の生成に必要な VAE(約 254MB)。Krea 2 と同じファイルです。",
+        "en": "The VAE Anima needs (~254MB). It is the same file Krea 2 uses."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "variants": [
+        {
+          "id": "qwen-image-vae",
+          "label": {
+            "ja": "Qwen-Image VAE(推奨)",
+            "en": "Qwen-Image VAE (recommended)"
+          },
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/circlestone-labs/Anima/resolve/6e0b2da2112573380abfb6a1435a60a994b254f2/split_files/vae/qwen_image_vae.safetensors",
+            "repo": "circlestone-labs/Anima"
+          },
+          "sizeBytes": 253806246,
+          "sha256": "a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f",
+          "destDir": "vae",
+          "fileName": "qwen_image_vae.safetensors",
+          "license": {
+            "name": "CircleStone Labs Non-Commercial License",
+            "url": "https://huggingface.co/circlestone-labs/Anima/blob/main/LICENSE.md",
+            "commercialUse": false
+          },
+          "requiresConsent": false
+        }
+      ]
+    },
+    {
+      "id": "qwen-image-2-1",
+      "category": "qwen_image",
+      "kind": "qwen_image",
+      "tags": [],
+      "name": {
+        "ja": "Qwen-Image 2.1",
+        "en": "Qwen-Image 2.1"
+      },
+      "description": {
+        "ja": "Alibaba の汎用の画像生成モデル(7B 級)。自然な文章での指示に向きます。重いモデルで、本体・テキストエンコーダ・VAE で約 17GB です(「必要なファイルをまとめて取得」)。INT8 版が推奨で、BF16 版は約 2 倍のサイズです。",
+        "en": "Alibaba's general-purpose image model (7B class), suited to sentence-style prompts. It is heavy: about 17GB with the text encoder and VAE (use \"Get all required files\"). The INT8 build is recommended; BF16 is about twice the size."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "requires": [
+        {
+          "familyId": "qwen-image-2-1-text-encoder",
+          "variantId": "int8-convrot"
+        },
+        {
+          "familyId": "qwen-image-2-1-vae",
+          "variantId": "bf16"
+        }
+      ],
+      "profile": {
+        "summary": {
+          "ja": "自然な文章での指示に向く、汎用の高性能モデル。重い(約 17GB)",
+          "en": "A general-purpose, high-capability model for sentence-style prompts. Heavy (~17GB)"
+        },
+        "style": [
+          "general"
+        ],
+        "bestFor": {
+          "ja": [
+            "自然な文章(日本語を含む)での指示に向く",
+            "特定の画風に偏らない汎用モデル"
+          ],
+          "en": [
+            "Suited to natural sentence prompts (including Japanese)",
+            "A general model, not tied to one art style"
+          ]
+        },
+        "weakAt": {
+          "ja": [
+            "重い(本体とエンコーダで約 17GB。VRAM 12GB 以上が目安)",
+            "顔補正・ControlNet・Inpaint は使えない",
+            "アニメ・イラストへの特化はない(Danbooru タグ向きではない)"
+          ],
+          "en": [
+            "Heavy (~17GB with the encoder; about 12GB of VRAM or more)",
+            "No face fix, ControlNet or Inpaint",
+            "Not specialised for anime (not for Danbooru tags)"
+          ]
+        },
+        "promptStyle": {
+          "kind": "natural",
+          "language": "multilingual",
+          "hint": {
+            "ja": "文章で具体的に書く(被写体・構図・光・画風。例: A quiet street at dusk, soft rain, cinematic lighting)",
+            "en": "Write concrete sentences (subject, composition, light, style; e.g. A quiet street at dusk, soft rain, cinematic lighting)"
+          }
+        },
+        "recommended": {
+          "steps": 25,
+          "cfg": 1,
+          "sampler": "euler",
+          "scheduler": "simple",
+          "size": {
+            "width": 1024,
+            "height": 1024
+          }
+        },
+        "resources": {
+          "vramGb": 12,
+          "speed": "slow"
+        },
+        "moderation": {
+          "level": "unknown",
+          "note": {
+            "ja": "公式のモデルカードに内容規制・学習データの記載が見当たらない",
+            "en": "The official model card has no statement on content restrictions or training data"
+          }
+        },
+        "sourceNote": {
+          "ja": "配布元(Comfy-Org/Qwen-Image-2.1)の説明と、ComfyUI の公式テンプレートに基づく目安",
+          "en": "A guideline based on the distributor's description (Comfy-Org/Qwen-Image-2.1) and ComfyUI's official template"
+        }
+      },
+      "variants": [
+        {
+          "id": "int8-convrot",
+          "label": {
+            "ja": "INT8 convrot(約 7.3GB・推奨)",
+            "en": "INT8 convrot (~7.3GB, recommended)"
+          },
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/aacf31a6d48e707f352ecba714cee0680da3479b/diffusion_models/qwen_image_2.1_int8_convrot.safetensors",
+            "repo": "Comfy-Org/Qwen-Image-2.1"
+          },
+          "sizeBytes": 7256783064,
+          "sha256": "cb74113cb03faecd79611b01fd7fd642f0aa60d6f0b95086abee214d75eaa57d",
+          "destDir": "unet",
+          "fileName": "qwen_image_2.1_int8_convrot.safetensors",
+          "license": {
+            "name": "Qwen Research License",
+            "url": "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE",
+            "commercialUse": false
+          },
+          "requiresConsent": true
+        },
+        {
+          "id": "bf16",
+          "label": {
+            "ja": "BF16(約 14.2GB)",
+            "en": "BF16 (~14.2GB)"
+          },
+          "source": {
+            "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/aacf31a6d48e707f352ecba714cee0680da3479b/diffusion_models/qwen_image_2.1_bf16.safetensors",
+            "repo": "Comfy-Org/Qwen-Image-2.1"
+          },
+          "sizeBytes": 14230280616,
+          "sha256": "89f4158d066cc33906a199fca85634f766892dd78f49b6698dabf187ac86c4bc",
+          "destDir": "unet",
+          "fileName": "qwen_image_2.1_bf16.safetensors",
+          "license": {
+            "name": "Qwen Research License",
+            "url": "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE",
+            "commercialUse": false
+          },
+          "requiresConsent": true
+        }
+      ]
+    },
+    {
+      "id": "qwen-image-2-1-text-encoder",
+      "category": "qwen_image",
+      "name": {
+        "ja": "Qwen-Image 2.1 — テキストエンコーダ(Qwen3-VL 8B)",
+        "en": "Qwen-Image 2.1 — text encoder (Qwen3-VL 8B)"
+      },
+      "description": {
+        "ja": "Qwen-Image 2.1 の生成に必要なテキストエンコーダ。INT8 版(約 9.4GB)が推奨です。",
+        "en": "The text encoder Qwen-Image 2.1 needs. The INT8 build (~9.4GB) is recommended."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "variants": [
+        {
+          "id": "int8-convrot",
+          "label": {
+            "ja": "INT8 convrot(約 9.4GB・推奨)",
+            "en": "INT8 convrot (~9.4GB, recommended)"
+          },
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/aacf31a6d48e707f352ecba714cee0680da3479b/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+            "repo": "Comfy-Org/Qwen-Image-2.1"
+          },
+          "sizeBytes": 9350798360,
+          "sha256": "8bfd0f6e12abf2d2d697ecc888e5e90b0d6741d6708f05799f53afa560452e8f",
+          "destDir": "clip",
+          "fileName": "qwen3vl_8b_int8_convrot.safetensors",
+          "license": {
+            "name": "Qwen Research License",
+            "url": "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE",
+            "commercialUse": false
+          },
+          "requiresConsent": false
+        },
+        {
+          "id": "bf16",
+          "label": {
+            "ja": "BF16(約 17.5GB)",
+            "en": "BF16 (~17.5GB)"
+          },
+          "source": {
+            "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/aacf31a6d48e707f352ecba714cee0680da3479b/text_encoders/qwen3vl_8b_bf16.safetensors",
+            "repo": "Comfy-Org/Qwen-Image-2.1"
+          },
+          "sizeBytes": 17534334616,
+          "sha256": "68bdc82bc1b66851162ae656225e7e2068166b603db19bd5d5a3b90eb12669a9",
+          "destDir": "clip",
+          "fileName": "qwen3vl_8b_bf16.safetensors",
+          "license": {
+            "name": "Qwen Research License",
+            "url": "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE",
+            "commercialUse": false
+          },
+          "requiresConsent": false
+        }
+      ]
+    },
+    {
+      "id": "qwen-image-2-1-vae",
+      "category": "qwen_image",
+      "name": {
+        "ja": "Qwen-Image 2.1 — VAE",
+        "en": "Qwen-Image 2.1 — VAE"
+      },
+      "description": {
+        "ja": "Qwen-Image 2.1 専用の VAE(約 676MB)。以前の Qwen-Image の VAE は使えません。",
+        "en": "The VAE dedicated to Qwen-Image 2.1 (~676MB). Earlier Qwen-Image VAEs do not work."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "variants": [
+        {
+          "id": "bf16",
+          "label": {
+            "ja": "BF16(推奨)",
+            "en": "BF16 (recommended)"
+          },
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/Comfy-Org/Qwen-Image-2.1/resolve/aacf31a6d48e707f352ecba714cee0680da3479b/vae/qwen_image_2.1_vae_bf16.safetensors",
+            "repo": "Comfy-Org/Qwen-Image-2.1"
+          },
+          "sizeBytes": 675509688,
+          "sha256": "bb21f7473051e1ac368515dd3f2e15cd44d7a11748ee8823e1ddca3e4876b7c9",
+          "destDir": "vae",
+          "fileName": "qwen_image_2.1_vae_bf16.safetensors",
+          "license": {
+            "name": "Qwen Research License",
+            "url": "https://huggingface.co/Qwen/Qwen-Image-2.1/blob/main/LICENSE",
+            "commercialUse": false
+          },
+          "requiresConsent": false
+        }
+      ]
+    },
+    {
+      "id": "qwen-image-2-1-face-swap-lora",
+      "category": "qwen_image",
+      "name": {
+        "ja": "Qwen-Image 2.1 — 顔の入れ替え用 LoRA(BFS)",
+        "en": "Qwen-Image 2.1 — face swap LoRA (BFS)"
+      },
+      "description": {
+        "ja": "生成画面の「顔の入れ替え」で使う追加モデル(約 260MB)。BFS(Best Face Swap)の Qwen-Image 2.1 用の頭の入れ替え LoRA(v1.1。作者の推奨版)です。本人の同意のある顔だけに使ってください。",
+        "en": "The add-on model (~260MB) used by \"Face swap\" on the Generate page: the BFS (Best Face Swap) head-swap LoRA for Qwen-Image 2.1 (v1.1, the author's recommended version). Use it only with faces of people who have consented."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "variants": [
+        {
+          "id": "bfs-head-v1.1",
+          "label": {
+            "ja": "BFS head v1.1(約 260MB・推奨)",
+            "en": "BFS head v1.1 (~260MB, recommended)"
+          },
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/resolve/2209ae537ac5e883d6ec7db5b7bd6dccf1a0eba7/bfs_head_v1.1_qwen_2.1.safetensors",
+            "repo": "Alissonerdx/BFS-Best-Face-Swap"
+          },
+          "sizeBytes": 260096144,
+          "sha256": "d1d748d5601077f3b6d05766f6823510e901970d916afa404a97e85dc92fa88e",
+          "destDir": "loras",
+          "fileName": "bfs_head_v1.1_qwen_2.1.safetensors",
+          "license": {
+            "name": "MIT(BFS Best Face Swap。公人や同意のない人物には使わないこと)",
+            "url": "https://huggingface.co/Alissonerdx/BFS-Best-Face-Swap/blob/main/docs/qwen-image-2.1.md",
+            "commercialUse": "see-license"
+          },
+          "requiresConsent": true
+        }
+      ]
+    },
+    {
+      "id": "krea2-turbo",
+      "category": "krea2",
+      "kind": "krea2",
+      "tags": [],
+      "name": {
+        "ja": "Krea 2 Turbo",
+        "en": "Krea 2 Turbo"
+      },
+      "description": {
+        "ja": "Krea の画像生成モデル(12.9B)の高速版。8 ステップ程度で生成でき、自然な文章での指示に向きます。重いモデルで、本体・テキストエンコーダ・VAE で約 18.6GB です(「必要なファイルをまとめて取得」)。FP8 版を使います。",
+        "en": "The fast build of Krea's 12.9B image model: about 8 steps, suited to sentence-style prompts. It is heavy: about 18.6GB with the text encoder and VAE (use \"Get all required files\"). The FP8 build is used."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "requires": [
+        {
+          "familyId": "krea2-text-encoder",
+          "variantId": "fp8-scaled"
+        },
+        {
+          "familyId": "krea2-vae",
+          "variantId": "qwen-image-vae"
+        }
+      ],
+      "profile": {
+        "summary": {
+          "ja": "8 ステップ程度で生成できる、自然な文章向けの高速版。重い(約 18.6GB)",
+          "en": "A fast build that needs about 8 steps and suits sentence-style prompts. Heavy (~18.6GB)"
+        },
+        "style": [
+          "general"
+        ],
+        "bestFor": {
+          "ja": [
+            "少ないステップ(8 前後)で生成できる",
+            "自然な文章での指示に向く"
+          ],
+          "en": [
+            "Needs few steps (about 8)",
+            "Suited to natural sentence prompts"
+          ]
+        },
+        "weakAt": {
+          "ja": [
+            "重い(本体とエンコーダで約 18.6GB。VRAM 16GB 以上が目安)",
+            "ネガティブプロンプトは使えない",
+            "顔補正・ControlNet・Inpaint は使えない"
+          ],
+          "en": [
+            "Heavy (~18.6GB with the encoder; about 16GB of VRAM or more)",
+            "No negative prompt",
+            "No face fix, ControlNet or Inpaint"
+          ]
+        },
+        "promptStyle": {
+          "kind": "natural",
+          "hint": {
+            "ja": "文章で具体的に書く(被写体・構図・光・画風。例: A quiet street at dusk, soft rain, cinematic lighting)",
+            "en": "Write concrete sentences (subject, composition, light, style; e.g. A quiet street at dusk, soft rain, cinematic lighting)"
+          }
+        },
+        "recommended": {
+          "steps": 8,
+          "cfg": 1,
+          "sampler": "euler",
+          "scheduler": "simple",
+          "size": {
+            "width": 1024,
+            "height": 1024
+          }
+        },
+        "resources": {
+          "vramGb": 16,
+          "speed": "medium"
+        },
+        "moderation": {
+          "level": "strict",
+          "note": {
+            "ja": "モデルカードに、有害コンテンツを減らす追加調整と、学習データから特定の有害カテゴリを除外した旨の記載がある",
+            "en": "The model card describes targeted fine-tuning against harmful content and filtering of certain harmful categories from the training data"
+          }
+        },
+        "sourceNote": {
+          "ja": "配布元(Comfy-Org/Krea-2)の説明と、ComfyUI の公式テンプレートに基づく目安",
+          "en": "A guideline based on the distributor's description (Comfy-Org/Krea-2) and ComfyUI's official template"
+        }
+      },
+      "variants": [
+        {
+          "id": "fp8-scaled",
+          "label": {
+            "ja": "Turbo FP8 scaled(約 13.1GB・推奨)",
+            "en": "Turbo FP8 scaled (~13.1GB, recommended)"
+          },
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/588feaf955b08b9ac4723eeb751752ab045dba71/diffusion_models/krea2_turbo_fp8_scaled.safetensors",
+            "repo": "Comfy-Org/Krea-2"
+          },
+          "sizeBytes": 13141730784,
+          "sha256": "eb4dd8c612cfd10f64f25b057e6e6bbcb5737c94a7372177e456dbf7579502f1",
+          "destDir": "unet",
+          "fileName": "krea2_turbo_fp8_scaled.safetensors",
+          "license": {
+            "name": "Krea 2 Community License",
+            "url": "https://huggingface.co/krea/Krea-2-Turbo/blob/main/LICENSE.pdf",
+            "commercialUse": "see-license"
+          },
+          "requiresConsent": true
+        }
+      ]
+    },
+    {
+      "id": "krea2-text-encoder",
+      "category": "krea2",
+      "name": {
+        "ja": "Krea 2 — テキストエンコーダ(Qwen3-VL 4B)",
+        "en": "Krea 2 — text encoder (Qwen3-VL 4B)"
+      },
+      "description": {
+        "ja": "Krea 2 の生成に必要なテキストエンコーダ(約 5.2GB)。",
+        "en": "The text encoder Krea 2 needs (~5.2GB)."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "variants": [
+        {
+          "id": "fp8-scaled",
+          "label": {
+            "ja": "FP8 scaled(推奨)",
+            "en": "FP8 scaled (recommended)"
+          },
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/588feaf955b08b9ac4723eeb751752ab045dba71/text_encoders/qwen3vl_4b_fp8_scaled.safetensors",
+            "repo": "Comfy-Org/Krea-2"
+          },
+          "sizeBytes": 5242467968,
+          "sha256": "54bd5144df0bbc25dd6ccadfcb826b521445a1b06ae5a42570bdd2974ca87094",
+          "destDir": "clip",
+          "fileName": "qwen3vl_4b_fp8_scaled.safetensors",
+          "license": {
+            "name": "Krea 2 Community License",
+            "url": "https://huggingface.co/krea/Krea-2-Turbo/blob/main/LICENSE.pdf",
+            "commercialUse": "see-license"
+          },
+          "requiresConsent": false
+        }
+      ]
+    },
+    {
+      "id": "krea2-vae",
+      "category": "krea2",
+      "name": {
+        "ja": "Krea 2 — VAE(Qwen-Image VAE)",
+        "en": "Krea 2 — VAE (Qwen-Image VAE)"
+      },
+      "description": {
+        "ja": "Krea 2 の生成に必要な VAE(約 254MB)。Anima と同じファイルです。",
+        "en": "The VAE Krea 2 needs (~254MB). It is the same file Anima uses."
+      },
+      "usedBy": [
+        "generate"
+      ],
+      "variants": [
+        {
+          "id": "qwen-image-vae",
+          "label": {
+            "ja": "Qwen-Image VAE(推奨)",
+            "en": "Qwen-Image VAE (recommended)"
+          },
+          "recommended": true,
+          "source": {
+            "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/588feaf955b08b9ac4723eeb751752ab045dba71/vae/qwen_image_vae.safetensors",
+            "repo": "Comfy-Org/Krea-2"
+          },
+          "sizeBytes": 253806246,
+          "sha256": "a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f",
+          "destDir": "vae",
+          "fileName": "qwen_image_vae.safetensors",
+          "license": {
+            "name": "Krea 2 Community License",
+            "url": "https://huggingface.co/krea/Krea-2-Turbo/blob/main/LICENSE.pdf",
+            "commercialUse": "see-license"
+          },
+          "requiresConsent": false
+        }
+      ]
+    }
+  ]
+}

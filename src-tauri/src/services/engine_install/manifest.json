@@ -1,0 +1,118 @@
+{
+  "_generated": "tools/gen-engine-manifest.mjs が versions.env と manifest-meta.json から生成します。手で編集せず、npm run engine-manifest を実行してください(docs/41)",
+  "schemaVersion": 1,
+  "manifestVersion": "2026.11.1",
+  "allowedHosts": [
+    "github.com",
+    "objects.githubusercontent.com",
+    "release-assets.githubusercontent.com",
+    "download.pytorch.org",
+    "pypi.org",
+    "files.pythonhosted.org"
+  ],
+  "python": {
+    "version": "3.12.16",
+    "windows-x64": {
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.12.16%2B20261110-x86_64-pc-windows-msvc-install_only.tar.gz",
+      "sha256": "e23fe5b16926de1d81661b1a97352e89fb167549c55a6825796ccd0f32ec7f1b",
+      "sizeBytes": 47438699
+    },
+    "macos-arm64": {
+      "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.12.16%2B20261110-aarch64-apple-darwin-install_only.tar.gz",
+      "sha256": "e956e60bc9465d577ef8062059aa05cd3a2665b4b8678a2ed24e432368330b8f",
+      "sizeBytes": 25371130
+    }
+  },
+  "comfyui": {
+    "tag": "v0.45.6",
+    "commit": "45eb6e6f954a532760b2226873a8c1a131043abd",
+    "license": "GPL-3.0",
+    "source": {
+      "url": "https://github.com/comfyanonymous/ComfyUI/archive/45eb6e6f954a532760b2226873a8c1a131043abd.zip",
+      "sha256": "b1948bf7a3d8b234562d3f7aa95fff869e43e983ca42db6d569644f46bbe52ff",
+      "sizeBytes": 13719948
+    }
+  },
+  "torch": {
+    "version": "2.14.1",
+    "torchvision": "0.29.1",
+    "torchaudio": "2.11.0",
+    "windowsIndex": "https://download.pytorch.org/whl/cu130",
+    "license": "BSD-3-Clause",
+    "downloadMb": 3500,
+    "diskMb": 8000
+  },
+  "components": [
+    {
+      "id": "gguf",
+      "name": "ComfyUI-GGUF",
+      "repo": "https://github.com/city96/ComfyUI-GGUF",
+      "commit": "6ea2651e7df66d7585f6ffee804b20e92fb38b8a",
+      "license": "Apache-2.0",
+      "expectNode": "UnetLoaderGGUF",
+      "downloadMb": 20,
+      "diskMb": 60,
+      "source": {
+        "url": "https://github.com/city96/ComfyUI-GGUF/archive/6ea2651e7df66d7585f6ffee804b20e92fb38b8a.zip",
+        "sha256": "aad273a0b774684285b4496f6edff7e2293bd29d71ef89926d6861bfdf4947ac",
+        "sizeBytes": 38051
+      }
+    },
+    {
+      "id": "face",
+      "name": "ComfyUI-Impact-Pack / Impact-Subpack(ultralytics を含む)",
+      "repo": "https://github.com/ltdrdata/ComfyUI-Impact-Pack",
+      "commit": "9b4cb3a7c6969c1f4f128dc7fc87f92bc4ecfe16",
+      "license": "GPL-3.0 / AGPL-3.0(ultralytics)",
+      "expectNode": "FaceDetailer",
+      "downloadMb": 600,
+      "diskMb": 1500,
+      "source": {
+        "url": "https://github.com/ltdrdata/ComfyUI-Impact-Pack/archive/9b4cb3a7c6969c1f4f128dc7fc87f92bc4ecfe16.zip",
+        "sha256": "7c9b1e0c59d444151734be6beea5a85ef80eaafd3dde58f7b3cbcf70733184ef",
+        "sizeBytes": 3027779
+      },
+      "extra": {
+        "name": "ComfyUI-Impact-Subpack",
+        "repo": "https://github.com/ltdrdata/ComfyUI-Impact-Subpack",
+        "commit": "5b4e55058ae48e18e1c6d974000461ad1e240135",
+        "expectNode": "UltralyticsDetectorProvider",
+        "source": {
+          "url": "https://github.com/ltdrdata/ComfyUI-Impact-Subpack/archive/5b4e55058ae48e18e1c6d974000461ad1e240135.zip",
+          "sha256": "ce5fd34831cb6f195a85950aa5953ffef8d7ef4a1c1fe4502447acd5392ad9b7",
+          "sizeBytes": 27936
+        }
+      }
+    },
+    {
+      "id": "controlnet",
+      "name": "comfyui_controlnet_aux",
+      "repo": "https://github.com/Fannovel16/comfyui_controlnet_aux",
+      "commit": "c2655d2970d810d8a3d71deed204cdf416b66132",
+      "license": "Apache-2.0",
+      "expectNode": "DepthAnythingV2Preprocessor",
+      "downloadMb": 300,
+      "diskMb": 800,
+      "source": {
+        "url": "https://github.com/Fannovel16/comfyui_controlnet_aux/archive/c2655d2970d810d8a3d71deed204cdf416b66132.zip",
+        "sha256": "1afd3b708bce982edca19a4a142289eea2e325af45f3839645541afdca1fb2df",
+        "sizeBytes": 39937261
+      }
+    },
+    {
+      "id": "tagger",
+      "name": "ComfyUI-WD14-Tagger(onnxruntime を含む。解析モデルは初回の解析時にノードが取得)",
+      "repo": "https://github.com/pythongosssss/ComfyUI-WD14-Tagger",
+      "commit": "9e0a6e700299182fc05c58b62e7ad9f72182a78b",
+      "license": "MIT",
+      "expectNode": "WD14Tagger|pysssss",
+      "downloadMb": 20,
+      "diskMb": 100,
+      "source": {
+        "url": "https://github.com/pythongosssss/ComfyUI-WD14-Tagger/archive/9e0a6e700299182fc05c58b62e7ad9f72182a78b.zip",
+        "sha256": "9b70c4bb7f881e58906f6a9659dde75a7a3c83c07c9785d74ae4a3009c76ed64",
+        "sizeBytes": 13652
+      }
+    }
+  ]
+}

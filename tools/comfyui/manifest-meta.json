@@ -1,0 +1,74 @@
+{
+  "$comment": "アプリ内インストーラのマニフェスト(src-tauri/src/services/engine_install/manifest.json)のうち、versions.env から決まらない静的な情報。手で編集する。manifest.json は tools/gen-engine-manifest.mjs で生成する(docs/41)。",
+  "schemaVersion": 1,
+  "allowedHosts": [
+    "github.com",
+    "objects.githubusercontent.com",
+    "release-assets.githubusercontent.com",
+    "download.pytorch.org",
+    "pypi.org",
+    "files.pythonhosted.org"
+  ],
+  "python": {
+    "patchVersion": "3.12.16",
+    "releaseTag": "20261110"
+  },
+  "comfyui": {
+    "license": "GPL-3.0",
+    "envTag": "COMFYUI_TAG",
+    "envRepo": "COMFYUI_REPO"
+  },
+  "torch": {
+    "license": "BSD-3-Clause",
+    "downloadMb": 3500,
+    "diskMb": 8000
+  },
+  "components": [
+    {
+      "id": "gguf",
+      "name": "ComfyUI-GGUF",
+      "license": "Apache-2.0",
+      "expectNode": "UnetLoaderGGUF",
+      "downloadMb": 20,
+      "diskMb": 60,
+      "envCommit": "GGUF_NODE_COMMIT",
+      "envRepo": "GGUF_NODE_REPO"
+    },
+    {
+      "id": "face",
+      "name": "ComfyUI-Impact-Pack / Impact-Subpack(ultralytics を含む)",
+      "license": "GPL-3.0 / AGPL-3.0(ultralytics)",
+      "expectNode": "FaceDetailer",
+      "downloadMb": 600,
+      "diskMb": 1500,
+      "envCommit": "IMPACT_PACK_COMMIT",
+      "envRepo": "IMPACT_PACK_REPO",
+      "extra": {
+        "name": "ComfyUI-Impact-Subpack",
+        "expectNode": "UltralyticsDetectorProvider",
+        "envCommit": "IMPACT_SUBPACK_COMMIT",
+        "envRepo": "IMPACT_SUBPACK_REPO"
+      }
+    },
+    {
+      "id": "controlnet",
+      "name": "comfyui_controlnet_aux",
+      "license": "Apache-2.0",
+      "expectNode": "DepthAnythingV2Preprocessor",
+      "downloadMb": 300,
+      "diskMb": 800,
+      "envCommit": "CONTROLNET_AUX_COMMIT",
+      "envRepo": "CONTROLNET_AUX_REPO"
+    },
+    {
+      "id": "tagger",
+      "name": "ComfyUI-WD14-Tagger(onnxruntime を含む。解析モデルは初回の解析時にノードが取得)",
+      "license": "MIT",
+      "expectNode": "WD14Tagger|pysssss",
+      "downloadMb": 20,
+      "diskMb": 100,
+      "envCommit": "WD14_TAGGER_COMMIT",
+      "envRepo": "WD14_TAGGER_REPO"
+    }
+  ]
+}

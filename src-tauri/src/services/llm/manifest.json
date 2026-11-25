@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "manifestVersion": "2026.11.1",
+  "allowedHosts": [
+    "github.com",
+    "objects.githubusercontent.com",
+    "release-assets.githubusercontent.com",
+    "huggingface.co",
+    "hf.co"
+  ],
+  "runtime": {
+    "build": "b12426",
+    "license": "MIT",
+    "windows-x64": {
+      "kind": "zip",
+      "exe": "llama-server.exe",
+      "source": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12426/llama-b12426-bin-win-vulkan-x64.zip",
+        "sha256": "4607416aaa5d223598f54bf99fe081d87414c3a83f8c94ef820947049579fb0e",
+        "sizeBytes": 38287057
+      }
+    },
+    "macos-arm64": {
+      "kind": "tar.gz",
+      "exe": "llama-b12426/llama-server",
+      "source": {
+        "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12426/llama-b12426-bin-macos-arm64.tar.gz",
+        "sha256": "509014dded612bf2d1afeb30852ff7b5735f2761da74c6f39845a4c04378a3e4",
+        "sizeBytes": 17003210
+      }
+    }
+  },
+  "model": {
+    "name": "Qwen3.5-9B",
+    "quant": "Q4_K_M",
+    "license": "Apache-2.0",
+    "repo": "unsloth/Qwen3.5-9B-GGUF",
+    "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+    "fileName": "Qwen3.5-9B-Q4_K_M.gguf",
+    "source": {
+      "url": "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf",
+      "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+      "sizeBytes": 5680522464
+    }
+  }
+}

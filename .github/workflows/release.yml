@@ -1,0 +1,70 @@
+# リリース(タグ `v*`)。インストーラをビルドし、GitHub Releases に **下書き** として登録する。
+# 公開は、docs/09-release-checklist.md の手動検証を終えてから人間が行う。
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Verify version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+      # タグ名と、package.json / Cargo.toml / tauri.conf.json のバージョンが一致していること
+      - run: node tools/check-version.mjs "${{ github.ref_name }}"
+
+  release:
+    name: Release (${{ matrix.os }})
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            bundles: nsis
+          - os: macos-latest
+            bundles: app,dmg
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: Install Rust toolchain (rust-toolchain.toml)
+        run: rustup toolchain install
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: npm run tauri
+          args: --bundles ${{ matrix.bundles }}
+          tagName: ${{ github.ref_name }}
+          releaseName: gazooo ${{ github.ref_name }}
+          releaseBody: |
+            ## 注意
+            - このインストーラは **コード署名・公証をしていません**。
+              - Windows: SmartScreen の警告が出ます(「詳細情報」→「実行」)。
+              - macOS: 初回は Gatekeeper の警告が出ます(macOS 15 以降は「システム設定 → プライバシーとセキュリティ → このまま開く」、それ以前は右クリック →「開く」)。
+            - 画像生成には、別途 ComfyUI の起動とモデルの配置が必要です。詳細は README を参照してください。
+          releaseDraft: true
+          prerelease: false

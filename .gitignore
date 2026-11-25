@@ -1,0 +1,64 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# tauri / rust
+/src-tauri/target/
+/src-tauri/gen/schemas/
+/src-tauri/gen/android/
+/src-tauri/gen/apple/
+# バンドル成果物
+*.dmg
+*.msi
+*.exe
+*.app
+
+# testing
+/coverage
+/test-results/
+/playwright-report/
+
+# ログ
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# 環境変数・秘密情報(サンプルはコミット可)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ローカル DB・生成画像(アプリデータは app_data_dir に置くが、誤配置対策)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+._*
+Thumbs.db
+desktop.ini
+
+# エディタ / IDE(共有したい設定のみ許可)
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+
+# Claude Code ローカル設定
+.claude/settings.local.json
+
+# ローカル ComfyUI(docs/08-local-comfyui.md)
+/comfyui/
