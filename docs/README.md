@@ -57,6 +57,7 @@
 | 47 | [engine-auto-recovery.md](47-engine-auto-recovery.md) | ComfyUI の自動復旧(接続が 90 秒以上切れたら再起動し、キューを再実行。設定で ON/OFF)の設計(v0.47) | 🟢 承認済み(2026-11-24。既定 OFF。07 B48・Q-404〜410。04・05・15 の追記は実装と同時) |
 | 48 | [failed-job-deferral.md](48-failed-job-deferral.md) | 失敗したジョブの自動再試行(3 回続けて失敗したら待機の末尾へ後回し)の設計(v0.48) | 🟡 レビュー待ち(2026-11-25。07 B50・Q-415〜418) |
 | 49 | [gallery-delete-non-favorites.md](49-gallery-delete-non-favorites.md) | ギャラリーのお気に入り以外の一括削除(現在のスコープのお気に入り以外をゴミ箱へ。件数つき確認・`image_count_non_favorite` / `image_delete_non_favorite`・`STALE_COUNT` の安全弁)の設計(v0.49、M40)。04・05・09 への追記案を含む | 🟢 承認済み・実装済み(2026-11-25。07 Q-419〜426 は推奨どおり。Rust 510・Vitest 388・clippy・ESLint・tsc まで確認。画面の目視確認・macOS は未実施。差異は §8) |
+| 50 | [generate-form-two-columns.md](50-generate-form-two-columns.md) | 生成ページのスクロール一本化(実施済み)と、フォームの 2 列化(`xl` 以上。左 = 入力、右 = 調整)の設計(v0.51)。05・09 への追記案を含む | 🟡 レビュー待ち(2026-11-25。07 B53・Q-435〜438) |
 | — | [07 B7 / Q-52](07-open-questions.md) | アプリ名を `gazoo` から `gazooo` へ変更(識別子・DB・crate 名を含む全置換) | 🟢 承認済み・実装済み(2026-11-19。02・03・06・08〜13 とコード・設定・CI・README の名称を置換。旧印 `# managed by gazoo` は引き続き認識する) |
 
 ステータス凡例: 🟡 レビュー待ち / 🟢 承認済み / 🔴 要修正
