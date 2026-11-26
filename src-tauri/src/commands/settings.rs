@@ -3,13 +3,58 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
 use crate::db::Db;
+use crate::db::scopes::{self, Group, Layer, Scope};
 use crate::error::{AppError, AppResult};
 use crate::services::engine::EngineService;
 use crate::services::settings::{self, Settings, SettingsPatch};
 
 #[tauri::command]
-pub async fn settings_get(db: State<'_, Db>) -> AppResult<Settings> {
-    db.call(|c| settings::load(c)).await
+pub async fn settings_get(db: State<'_, Db>, scope: Option<Scope>) -> AppResult<Settings> {
+    match Layer::from(scope) {
+        // 全体設定は、ログイン前(ユーザーの選択画面のテーマと言語)にも読む
+        Layer::Global => {
+            db.call_device(|c| settings::load_in(c, Layer::Global))
+                .await
+        }
+        Layer::Effective => db.call(|c| settings::load(c)).await,
+    }
+}
+
+/// 個別設定にしている組(docs/52 §3)。
+#[tauri::command]
+pub async fn settings_scope_get(db: State<'_, Db>) -> AppResult<Vec<Group>> {
+    db.call(|c| {
+        let mut out = Vec::new();
+        for g in Group::ALL {
+            if scopes::is_overridden(c, g)? {
+                out.push(g);
+            }
+        }
+        Ok(out)
+    })
+    .await
+}
+
+/// 組を個別設定にする / 全体設定に戻す。
+#[tauri::command]
+pub async fn settings_scope_set(
+    db: State<'_, Db>,
+    group: Group,
+    overridden: bool,
+) -> AppResult<()> {
+    db.call(move |c| {
+        let tx = c.transaction()?;
+        scopes::set_override(&tx, group, overridden)?;
+        tx.commit()?;
+        Ok(())
+    })
+    .await
+}
+
+/// 全体設定の組を標準値に戻す。
+#[tauri::command]
+pub async fn settings_scope_reset_global(db: State<'_, Db>, group: Group) -> AppResult<()> {
+    db.call(move |c| scopes::reset_global(c, group)).await
 }
 
 #[tauri::command]
@@ -23,7 +68,7 @@ pub async fn settings_update(
     if patch.images_dir.is_some() {
         return Err(AppError::validation(
             "imagesDir",
-            "保存先の変更は専用の操作(既存画像の移動の選択つき)で行ってください",
+            "保存先の変更は、設定の「保存先」タブの専用の操作で行ってください",
         ));
     }
     let updated = db.call(move |c| settings::update(c, patch)).await?;

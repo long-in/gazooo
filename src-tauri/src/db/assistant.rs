@@ -7,6 +7,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::db::scopes::{self, Layer, Scope};
 use crate::error::{AppError, AppResult};
 use crate::util::now_ms;
 
@@ -71,29 +72,16 @@ impl Provider {
 }
 
 fn get(conn: &Connection, key: &str) -> AppResult<Option<Value>> {
-    let raw: Option<String> = conn
-        .query_row(
-            &format!(
-                "SELECT value_json FROM {} WHERE key = ?1",
-                crate::db::settings_table(key)
-            ),
-            [key],
-            |r| r.get(0),
-        )
-        .optional()?;
-    Ok(raw.and_then(|s| serde_json::from_str(&s).ok()))
+    scopes::get_json(conn, Layer::Effective, key)
 }
 
+/// 個人の項目と端末の項目を書く(上書きできる項目は、書き込み先を指定する `scopes::write` を使う)。
 fn set(conn: &Connection, key: &str, value: &Value) -> AppResult<()> {
-    conn.execute(
-        &format!(
-            "INSERT INTO {} (key, value_json, updated_at) VALUES (?1, ?2, ?3)
-             ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at",
-            crate::db::settings_table(key)
-        ),
-        params![key, value.to_string(), now_ms()],
-    )?;
-    Ok(())
+    scopes::write(conn, Scope::User, key, Some(value))
+}
+
+fn set_in(conn: &Connection, scope: Scope, key: &str, value: Value) -> AppResult<()> {
+    scopes::write(conn, scope, key, Some(&value))
 }
 
 /// フロントに返してよい設定(キー本体を含まない)。
@@ -112,6 +100,11 @@ pub struct AssistantStatus {
 }
 
 pub fn status(conn: &Connection) -> AppResult<AssistantStatus> {
+    status_in(conn, Layer::Effective)
+}
+
+pub fn status_in(conn: &Connection, layer: Layer) -> AppResult<AssistantStatus> {
+    let get = |c: &Connection, key: &str| scopes::get_json(c, layer, key);
     let has_key = api_key(conn)?.is_some();
     let model = get(conn, KEY_MODEL)?
         .and_then(|v| v.as_str().map(str::to_owned))
@@ -141,6 +134,11 @@ pub fn status(conn: &Connection) -> AppResult<AssistantStatus> {
 
 /// プロンプト翻訳の送信先とモデル(AI サポートとは別設定。docs/34 §4.1)。
 pub fn translate_settings(conn: &Connection) -> AppResult<(Provider, String)> {
+    translate_settings_in(conn, Layer::Effective)
+}
+
+pub fn translate_settings_in(conn: &Connection, layer: Layer) -> AppResult<(Provider, String)> {
+    let get = |c: &Connection, key: &str| scopes::get_json(c, layer, key);
     let provider = get(conn, KEY_TRANSLATE_PROVIDER)?
         .and_then(|v| v.as_str().and_then(Provider::parse))
         .unwrap_or_default();
@@ -151,11 +149,16 @@ pub fn translate_settings(conn: &Connection) -> AppResult<(Provider, String)> {
     Ok((provider, model))
 }
 
-pub fn set_translate_provider(conn: &Connection, provider: Provider) -> AppResult<()> {
-    set(
+pub fn set_translate_provider(
+    conn: &Connection,
+    scope: Scope,
+    provider: Provider,
+) -> AppResult<()> {
+    set_in(
         conn,
+        scope,
         KEY_TRANSLATE_PROVIDER,
-        &Value::String(provider.as_str().to_string()),
+        provider.as_str().into(),
     )
 }
 
@@ -188,45 +191,42 @@ impl MtModel {
 }
 
 pub fn translate_mt_model(conn: &Connection) -> AppResult<MtModel> {
-    Ok(get(conn, KEY_TRANSLATE_MT_MODEL)?
+    translate_mt_model_in(conn, Layer::Effective)
+}
+
+pub fn translate_mt_model_in(conn: &Connection, layer: Layer) -> AppResult<MtModel> {
+    Ok(scopes::get_json(conn, layer, KEY_TRANSLATE_MT_MODEL)?
         .and_then(|v| v.as_str().and_then(MtModel::parse))
         .unwrap_or_default())
 }
 
-pub fn set_translate_mt_model(conn: &Connection, mt: MtModel) -> AppResult<()> {
-    set(
-        conn,
-        KEY_TRANSLATE_MT_MODEL,
-        &Value::String(mt.as_str().to_string()),
-    )
+pub fn set_translate_mt_model(conn: &Connection, scope: Scope, mt: MtModel) -> AppResult<()> {
+    set_in(conn, scope, KEY_TRANSLATE_MT_MODEL, mt.as_str().into())
 }
 
-pub fn set_translate_model(conn: &Connection, model: &str) -> AppResult<()> {
+pub fn set_translate_model(conn: &Connection, scope: Scope, model: &str) -> AppResult<()> {
     if !MODELS.contains(&model) {
         return Err(AppError::validation("model", "選べないモデルです"));
     }
-    set(conn, KEY_TRANSLATE_MODEL, &Value::String(model.to_string()))
+    set_in(conn, scope, KEY_TRANSLATE_MODEL, model.into())
 }
 
-pub fn set_provider(conn: &Connection, provider: Provider) -> AppResult<()> {
-    set(
-        conn,
-        KEY_PROVIDER,
-        &Value::String(provider.as_str().to_string()),
-    )
+pub fn set_provider(conn: &Connection, scope: Scope, provider: Provider) -> AppResult<()> {
+    set_in(conn, scope, KEY_PROVIDER, provider.as_str().into())
 }
 
 /// 検証済みの URL とモデル名を保存する(ループバックの確認は呼び出し側。docs/11 §13.1)。
 pub fn set_local_server(
     conn: &Connection,
+    scope: Scope,
     base_url: Option<&str>,
     model: Option<&str>,
 ) -> AppResult<()> {
     if let Some(u) = base_url {
-        set(conn, KEY_LOCAL_BASE_URL, &Value::String(u.to_string()))?;
+        set_in(conn, scope, KEY_LOCAL_BASE_URL, u.into())?;
     }
     if let Some(m) = model {
-        set(conn, KEY_LOCAL_MODEL, &Value::String(m.to_string()))?;
+        set_in(conn, scope, KEY_LOCAL_MODEL, m.into())?;
     }
     Ok(())
 }
@@ -290,35 +290,38 @@ pub fn clear_api_key(conn: &Connection) -> AppResult<()> {
     Ok(())
 }
 
-pub fn set_model(conn: &Connection, model: &str) -> AppResult<()> {
+pub fn set_model(conn: &Connection, scope: Scope, model: &str) -> AppResult<()> {
     if !MODELS.contains(&model) {
         return Err(AppError::validation("model", "選べないモデルです"));
     }
-    set(conn, KEY_MODEL, &Value::String(model.to_string()))
+    set_in(conn, scope, KEY_MODEL, model.into())
 }
 
 pub fn set_consent(conn: &Connection, consent: bool) -> AppResult<()> {
     set(conn, KEY_CONSENT, &Value::Bool(consent))
 }
 
-pub fn set_auto_delete(conn: &Connection, on: bool) -> AppResult<()> {
-    set(conn, KEY_AUTO_DELETE, &Value::Bool(on))
+pub fn set_auto_delete(conn: &Connection, scope: Scope, on: bool) -> AppResult<()> {
+    set_in(conn, scope, KEY_AUTO_DELETE, on.into())
 }
 
 /// 保存されたカスタムのシステムプロンプト(未設定なら `None` = 初期値。docs/11 §12.2)。
 pub fn system_prompt(conn: &Connection) -> AppResult<Option<String>> {
-    Ok(get(conn, KEY_SYSTEM_PROMPT)?
+    system_prompt_in(conn, Layer::Effective)
+}
+
+pub fn system_prompt_in(conn: &Connection, layer: Layer) -> AppResult<Option<String>> {
+    Ok(scopes::get_json(conn, layer, KEY_SYSTEM_PROMPT)?
         .and_then(|v| v.as_str().map(str::to_owned))
         .filter(|s| !s.trim().is_empty()))
 }
 
-pub fn set_system_prompt(conn: &Connection, text: &str) -> AppResult<()> {
-    set(conn, KEY_SYSTEM_PROMPT, &Value::String(text.to_string()))
+pub fn set_system_prompt(conn: &Connection, scope: Scope, text: &str) -> AppResult<()> {
+    set_in(conn, scope, KEY_SYSTEM_PROMPT, text.into())
 }
 
-pub fn clear_system_prompt(conn: &Connection) -> AppResult<()> {
-    conn.execute("DELETE FROM settings WHERE key = ?1", [KEY_SYSTEM_PROMPT])?;
-    Ok(())
+pub fn clear_system_prompt(conn: &Connection, scope: Scope) -> AppResult<()> {
+    scopes::write(conn, scope, KEY_SYSTEM_PROMPT, None)
 }
 
 // ---- 会話 ----
@@ -589,9 +592,14 @@ mod tests {
     #[tokio::test]
     async fn rejects_unknown_model() {
         let db = Db::open_in_memory().unwrap();
-        let err = db.call(|c| set_model(c, "gpt-x")).await.unwrap_err();
+        let err = db
+            .call(|c| set_model(c, Scope::User, "gpt-x"))
+            .await
+            .unwrap_err();
         assert_eq!(err.code(), "VALIDATION");
-        db.call(|c| set_model(c, "claude-haiku-5-5")).await.unwrap();
+        db.call(|c| set_model(c, Scope::User, "claude-haiku-5-5"))
+            .await
+            .unwrap();
         assert_eq!(
             db.call(|c| status(c)).await.unwrap().model,
             "claude-haiku-5-5"
@@ -650,7 +658,7 @@ mod tests {
         // 無効の間は削除されない
         let n = db
             .call(|c| {
-                set_auto_delete(c, false)?;
+                set_auto_delete(c, Scope::User, false)?;
                 enforce_limit(c)
             })
             .await
@@ -661,7 +669,7 @@ mod tests {
         // 有効に戻すと超過分(最も古い 2 件)が消える
         let n = db
             .call(|c| {
-                set_auto_delete(c, true)?;
+                set_auto_delete(c, Scope::User, true)?;
                 enforce_limit(c)
             })
             .await
@@ -698,8 +706,8 @@ mod tests {
         assert_eq!((p, m.as_str()), (Provider::Anthropic, "claude-haiku-5-5"));
 
         db.call(|c| {
-            set_translate_provider(c, Provider::Local)?;
-            set_translate_model(c, "claude-opus-5-5")
+            set_translate_provider(c, Scope::User, Provider::Local)?;
+            set_translate_model(c, Scope::User, "claude-opus-5-5")
         })
         .await
         .unwrap();
@@ -712,7 +720,11 @@ mod tests {
         assert_eq!(s.model, DEFAULT_MODEL);
 
         // 選べないモデルは拒否
-        assert!(db.call(|c| set_translate_model(c, "gpt-4")).await.is_err());
+        assert!(
+            db.call(|c| set_translate_model(c, Scope::User, "gpt-4"))
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]
@@ -722,7 +734,7 @@ mod tests {
             db.call(|c| translate_mt_model(c)).await.unwrap(),
             MtModel::General
         );
-        db.call(|c| set_translate_mt_model(c, MtModel::Dedicated))
+        db.call(|c| set_translate_mt_model(c, Scope::User, MtModel::Dedicated))
             .await
             .unwrap();
         assert_eq!(
@@ -736,8 +748,8 @@ mod tests {
         let db = Db::open_in_memory().unwrap();
         let s = db
             .call(|c| {
-                set_provider(c, Provider::Local)?;
-                set_local_server(c, Some("http://127.0.0.1:8080/v1"), Some("m"))?;
+                set_provider(c, Scope::User, Provider::Local)?;
+                set_local_server(c, Scope::User, Some("http://127.0.0.1:8080/v1"), Some("m"))?;
                 status(c)
             })
             .await
@@ -751,7 +763,7 @@ mod tests {
         assert_eq!(v["localBaseUrl"], "http://127.0.0.1:8080/v1");
         let s = db
             .call(|c| {
-                set_provider(c, Provider::LocalExternal)?;
+                set_provider(c, Scope::User, Provider::LocalExternal)?;
                 status(c)
             })
             .await

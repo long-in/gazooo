@@ -1,4 +1,5 @@
 import { invoke } from "./invoke";
+import type { SettingsScope } from "./settings";
 
 /** 画像の形式変換(docs/43)。パスは Rust 側が持ち、フロントは `id` だけを扱う。 */
 
@@ -67,13 +68,15 @@ export interface ConvertFinished {
   outputDir: string;
 }
 
-export const convertSettingsGet = () => invoke<ConvertSettings>("convert_settings_get");
+export const convertSettingsGet = (scope?: SettingsScope) =>
+  invoke<ConvertSettings>("convert_settings_get", { scope: scope ?? null });
 
-export const convertSettingsUpdate = (patch: ConvertSettingsPatch) =>
-  invoke<ConvertSettings>("convert_settings_update", { patch });
+export const convertSettingsUpdate = (patch: ConvertSettingsPatch, scope?: SettingsScope) =>
+  invoke<ConvertSettings>("convert_settings_update", { patch, scope: scope ?? null });
 
 /** 出力先をダイアログで選んで保存する(Rust 側)。キャンセルなら null。 */
-export const convertPickOutputDir = () => invoke<ConvertSettings | null>("convert_pick_output_dir");
+export const convertPickOutputDir = (scope?: SettingsScope) =>
+  invoke<ConvertSettings | null>("convert_pick_output_dir", { scope: scope ?? null });
 
 export const convertPickFiles = () => invoke<ConvertEntry[]>("convert_pick_files");
 

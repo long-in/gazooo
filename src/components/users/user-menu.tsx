@@ -120,7 +120,7 @@ export function UserMenu() {
           </Button>
           <Button
             variant="ghost"
-            render={<Link href="/settings?tab=other" />}
+            render={<Link href="/settings?scope=user&tab=other" />}
             onClick={() => setOpen(false)}
           >
             <LockKeyhole />

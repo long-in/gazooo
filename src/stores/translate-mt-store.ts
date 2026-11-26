@@ -10,6 +10,7 @@ import {
   translateMtRemove,
   translateMtStatus,
 } from "@/lib/tauri/translate";
+import { translateStatus, translateUpdate } from "@/lib/tauri/translate";
 import { useTranslateStore } from "@/stores/translate-store";
 
 interface TranslateMtState {
@@ -75,10 +76,13 @@ export const useTranslateMtStore = create<TranslateMtState>((set, get) => ({
     try {
       set({ status: await translateMtRemove() });
       // 削除したら、翻訳エンジンを元に戻す(未導入のまま専用モデルを選び続けない)
+      // 全体の操作なので全体設定を直す。本人が個別に専用モデルを選んでいた場合だけ、個別設定も直す
+      if ((await translateStatus("global")).mtModel === "dedicated")
+        await translateUpdate({ scope: "global", mtModel: "general" });
       const t = useTranslateStore.getState();
-      if (t.status?.mtModel === "dedicated")
+      await t.loadStatus();
+      if (useTranslateStore.getState().status?.mtModel === "dedicated")
         await t.update({ mtModel: "general" });
-      else await t.loadStatus();
     } finally {
       set({ busy: false });
     }

@@ -12,10 +12,11 @@ import { Switch } from "@/components/ui/switch";
 import { useErrorMessage, useT } from "@/lib/i18n/use-t";
 import { formatBytes } from "@/lib/models/catalog";
 import { toAppError } from "@/lib/tauri/errors";
+import type { SettingsScope } from "@/lib/tauri/settings";
 import { useDebugStore } from "@/stores/debug-store";
 
 /** 設定 > その他: 調査用の詳細ログ(docs/31 §5)。操作はすぐ反映し、[保存] ボタンの対象にしない。 */
-export function OtherSection() {
+export function OtherSection({ scope }: { scope: SettingsScope }) {
   const t = useT();
   const errorMessage = useErrorMessage();
   const status = useDebugStore((s) => s.status);
@@ -37,9 +38,18 @@ export function OtherSection() {
 
   const st = () => useDebugStore.getState();
 
+  // ロックとバックアップは本人のもの、デバッグログは PC 全体のもの(docs/52 §3)
+  if (scope === "user") {
+    return (
+      <div className="flex flex-col gap-8">
+        <LockSection />
+        <BackupSection />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-8">
-      <LockSection />
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-medium">{t("settings.debug.title")}</h2>
 
@@ -119,7 +129,6 @@ export function OtherSection() {
           }}
         />
       </section>
-      <BackupSection />
     </div>
   );
 }

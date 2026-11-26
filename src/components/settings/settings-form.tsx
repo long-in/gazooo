@@ -1,38 +1,31 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { type MessageKey } from "@/lib/i18n";
 import { useErrorMessage, useT } from "@/lib/i18n/use-t";
+import { parseSettingsLocation, settingsHref, type TabId, tabsFor } from "@/lib/settings/scope-nav";
 import { toAppError } from "@/lib/tauri/errors";
-import type { Language, Settings, Theme } from "@/lib/tauri/settings";
+import type { Settings, SettingsScope } from "@/lib/tauri/settings";
+import { cn } from "@/lib/utils";
+import { useSettingsScopeStore } from "@/stores/settings-scope-store";
 import { useSettingsStore } from "@/stores/settings-store";
-import { useUiStore } from "@/stores/ui-store";
 
 import { AssistantSection } from "./assistant-section";
-import { TranslateSection } from "./translate-section";
+import { ConvertDefaultsSection } from "./convert-defaults-section";
+import { DisplaySection } from "./display-section";
 import { EngineInstallSection } from "./engine-install-section";
 import { EngineProcessSection } from "./engine-process-section";
 import { OtherSection } from "./other-section";
 import { StorageSection } from "./storage-section";
-
-type LanguageChoice = Language | "auto";
-
-const TAB_IDS = ["engine", "storage", "assistant", "display", "other"] as const;
-type TabId = (typeof TAB_IDS)[number];
+import { TranslateSection } from "./translate-section";
 
 const TAB_LABELS: Record<TabId, MessageKey> = {
   engine: "settings.tabs.engine",
@@ -42,22 +35,7 @@ const TAB_LABELS: Record<TabId, MessageKey> = {
   other: "settings.tabs.other",
 };
 
-/** 検証エラーの field がどのタブの項目かを返す。 */
-const FIELD_TAB: Record<string, TabId> = {
-  comfyuiUrl: "engine",
-  theme: "display",
-  language: "display",
-};
-
-function parseTab(value: string | null): TabId {
-  return TAB_IDS.find((id) => id === value) ?? "engine";
-}
-
-const THEMES: { value: Theme; labelKey: MessageKey }[] = [
-  { value: "system", labelKey: "settings.ui.theme.system" },
-  { value: "light", labelKey: "settings.ui.theme.light" },
-  { value: "dark", labelKey: "settings.ui.theme.dark" },
-];
+const SCOPES: SettingsScope[] = ["user", "global"];
 
 export function SettingsForm() {
   const loaded = useSettingsStore((s) => s.loaded);
@@ -77,196 +55,143 @@ export function SettingsForm() {
   return <SettingsFormInner initial={settings} />;
 }
 
-function SettingsFormInner({ initial }: { initial: Settings }) {
+/** ComfyUI の接続先(全体設定)。入力して [保存] で反映する。 */
+function EngineUrlSection({ initial }: { initial: Settings }) {
   const t = useT();
   const errorMessage = useErrorMessage();
-  const update = useSettingsStore((s) => s.update);
-  const density = useUiStore((s) => s.density);
-
-  const [draft, setDraft] = useState<Settings>(initial);
-  const [fieldError, setFieldError] = useState<{
-    field?: string;
-    message: string;
-  } | null>(null);
+  const [url, setUrl] = useState(initial.comfyuiUrl);
+  const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const router = useRouter();
-  const params = useSearchParams();
-  const tab = parseTab(params.get("tab"));
-  function selectTab(next: TabId) {
-    router.replace(`/settings?tab=${next}`);
-  }
-
-  const languageChoice: LanguageChoice = draft.language ?? "auto";
 
   async function save() {
     setSaving(true);
-    setFieldError(null);
+    setError(null);
     try {
-      await update({
-        comfyuiUrl: draft.comfyuiUrl,
-        theme: draft.theme,
-        language: draft.language,
-      });
+      await useSettingsStore.getState().update({ comfyuiUrl: url });
       toast.success(t("settings.saved"));
     } catch (e) {
-      const err = toAppError(e);
-      const field = err.details?.field;
-      setFieldError({ field, message: errorMessage(err) });
-      if (field && FIELD_TAB[field]) selectTab(FIELD_TAB[field]);
-      toast.error(errorMessage(err));
+      const message = errorMessage(toAppError(e));
+      setError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-8 p-8">
+    <section className="flex flex-col gap-3">
+      <h2 className="text-lg font-medium">{t("settings.engine.title")}</h2>
+      <Label htmlFor="comfyui-url">{t("settings.engine.url")}</Label>
+      <div className="flex gap-2">
+        <Input id="comfyui-url" value={url} aria-invalid={error !== null} onChange={(e) => setUrl(e.target.value)} />
+        <Button onClick={() => void save()} disabled={saving}>
+          {t("settings.save")}
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">{t("settings.engine.urlHint")}</p>
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/**
+ * 設定ページ(docs/25・52)。上で [個別設定 | 全体設定] を切り替え、その下をカテゴリのタブにする。
+ */
+function SettingsFormInner({ initial }: { initial: Settings }) {
+  const t = useT();
+  const router = useRouter();
+  const params = useSearchParams();
+  const { scope, tab } = parseSettingsLocation(params.get("scope"), params.get("tab"));
+
+  useEffect(() => {
+    void useSettingsScopeStore.getState().load().catch(() => {});
+  }, []);
+
+  const go = (nextScope: SettingsScope, nextTab: TabId) => router.replace(settingsHref(nextScope, nextTab));
+
+  return (
+    <div className="mx-auto flex max-w-2xl flex-col gap-6 p-8">
       <h1 className="sr-only">{t("settings.title")}</h1>
 
-      <Tabs value={tab} onValueChange={(v) => selectTab(parseTab(v as string))}>
+      <div className="flex flex-col gap-2">
+        <div role="radiogroup" aria-label={t("settings.title")} className="flex w-fit gap-1 rounded-lg bg-muted p-1">
+          {SCOPES.map((s) => (
+            <button
+              key={s}
+              type="button"
+              role="radio"
+              aria-checked={scope === s}
+              onClick={() => go(s, parseSettingsLocation(s, tab).tab)}
+              className={cn(
+                "rounded-md px-4 py-1.5 text-sm transition-colors",
+                scope === s ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t(`settings.scope.${s}`)}
+            </button>
+          ))}
+        </div>
+        <p
+          className={cn(
+            "text-xs",
+            scope === "global"
+              ? "rounded-md border border-amber-500/40 bg-amber-500/10 p-2"
+              : "text-muted-foreground",
+          )}
+        >
+          {t(`settings.scope.${scope}.desc`)}
+        </p>
+      </div>
+
+      {/* スコープを切り替えたら中身を作り直し、そのスコープの値を読み直す */}
+      <Tabs key={scope} value={tab} onValueChange={(v) => go(scope, parseSettingsLocation(scope, v as string).tab)}>
         <TabsList>
-          {TAB_IDS.map((id) => (
+          {tabsFor(scope).map((id) => (
             <TabsTrigger key={id} value={id}>
               {t(TAB_LABELS[id])}
             </TabsTrigger>
           ))}
         </TabsList>
 
-        <TabsContent value="engine" keepMounted>
-          <section className="flex flex-col gap-3">
-            <h2 className="text-lg font-medium">
-              {t("settings.engine.title")}
-            </h2>
-            <Label htmlFor="comfyui-url">{t("settings.engine.url")}</Label>
-            <Input
-              id="comfyui-url"
-              value={draft.comfyuiUrl}
-              aria-invalid={fieldError?.field === "comfyuiUrl"}
-              onChange={(e) =>
-                setDraft((d) => ({ ...d, comfyuiUrl: e.target.value }))
-              }
-            />
-            <p className="text-xs text-muted-foreground">
-              {t("settings.engine.urlHint")}
-            </p>
-            {fieldError?.field === "comfyuiUrl" && (
-              <p role="alert" className="text-sm text-destructive">
-                {fieldError.message}
-              </p>
-            )}
-          </section>
-
-          <EngineInstallSection />
-
-          <EngineProcessSection />
-        </TabsContent>
+        {scope === "global" && (
+          <TabsContent value="engine" keepMounted>
+            <EngineUrlSection initial={initial} />
+            <EngineInstallSection />
+            <EngineProcessSection />
+          </TabsContent>
+        )}
 
         <TabsContent value="storage" keepMounted>
-          <StorageSection />
+          <StorageSection scope={scope} />
         </TabsContent>
 
         <TabsContent value="assistant" keepMounted>
           <div className="flex flex-col gap-8">
-            <AssistantSection />
-            <TranslateSection />
+            <AssistantSection scope={scope} />
+            <TranslateSection scope={scope} />
+            {scope === "user" && (
+              <Link href={settingsHref("global", "assistant")} className="text-xs underline underline-offset-2">
+                {t("settings.scope.installInGlobal")}
+              </Link>
+            )}
           </div>
         </TabsContent>
 
         <TabsContent value="display" keepMounted>
-          <section className="flex flex-col gap-3">
-            <h2 className="text-lg font-medium">{t("settings.ui.title")}</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <Label>{t("settings.ui.theme")}</Label>
-                <Select
-                  value={draft.theme}
-                  items={THEMES.map((x) => ({
-                    value: x.value,
-                    label: t(x.labelKey),
-                  }))}
-                  onValueChange={(v) =>
-                    v && setDraft((d) => ({ ...d, theme: v as Theme }))
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {THEMES.map((x) => (
-                      <SelectItem key={x.value} value={x.value}>
-                        {t(x.labelKey)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>{t("settings.ui.language")}</Label>
-                <Select
-                  value={languageChoice}
-                  items={[
-                    { value: "auto", label: t("settings.ui.language.auto") },
-                    { value: "ja", label: "日本語" },
-                    { value: "en", label: "English" },
-                  ]}
-                  onValueChange={(v) =>
-                    v &&
-                    setDraft((d) => ({
-                      ...d,
-                      language: v === "auto" ? null : (v as Language),
-                    }))
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">
-                      {t("settings.ui.language.auto")}
-                    </SelectItem>
-                    <SelectItem value="ja">日本語</SelectItem>
-                    <SelectItem value="en">English</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>{t("settings.ui.density")}</Label>
-                {/* 画面の状態なので、[保存] を待たずにすぐ反映・自動保存する */}
-                <Select
-                  value={density}
-                  items={[
-                    { value: "compact", label: t("settings.ui.density.compact") },
-                    { value: "comfortable", label: t("settings.ui.density.comfortable") },
-                  ]}
-                  onValueChange={(v) => v && useUiStore.getState().setDensity(v as "compact" | "comfortable")}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="compact">{t("settings.ui.density.compact")}</SelectItem>
-                    <SelectItem value="comfortable">{t("settings.ui.density.comfortable")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </section>
+          <DisplaySection scope={scope} />
         </TabsContent>
 
-        {/* デバッグ・ログの操作は即時反映(下の [保存] の対象外) */}
         <TabsContent value="other" keepMounted>
-          <OtherSection />
+          <div className="flex flex-col gap-8">
+            <ConvertDefaultsSection scope={scope} />
+            <OtherSection scope={scope} />
+          </div>
         </TabsContent>
       </Tabs>
-
-      {tab !== "other" && (
-        <div>
-          <Button onClick={save} disabled={saving}>
-            {t("settings.save")}
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

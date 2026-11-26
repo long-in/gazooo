@@ -4,6 +4,7 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::db::assistant::{AssistantStatus, Conversation, ConversationSummary};
+use crate::db::scopes::Scope;
 use crate::domain::params::GenerationParams;
 use crate::error::AppResult;
 use crate::services::assistant::openai_compat::LocalCheck;
@@ -28,8 +29,8 @@ pub struct DeleteResult {
 }
 
 #[tauri::command]
-pub async fn assistant_status(svc: Svc<'_>) -> AppResult<AssistantStatus> {
-    svc.status().await
+pub async fn assistant_status(svc: Svc<'_>, scope: Option<Scope>) -> AppResult<AssistantStatus> {
+    svc.status_in(scope.into()).await
 }
 
 #[tauri::command]
@@ -70,21 +71,25 @@ pub async fn assistant_local_check(
 }
 
 #[tauri::command]
-pub async fn assistant_prompt_get(svc: Svc<'_>) -> AppResult<PromptState> {
-    svc.prompt_get().await
+pub async fn assistant_prompt_get(svc: Svc<'_>, scope: Option<Scope>) -> AppResult<PromptState> {
+    svc.prompt_get_in(scope.into()).await
 }
 
 #[tauri::command]
-pub async fn assistant_prompt_set(svc: Svc<'_>, text: String) -> AppResult<PromptSaved> {
+pub async fn assistant_prompt_set(
+    svc: Svc<'_>,
+    text: String,
+    scope: Option<Scope>,
+) -> AppResult<PromptSaved> {
     Ok(PromptSaved {
-        customized: svc.prompt_set(text).await?,
+        customized: svc.prompt_set(scope.unwrap_or_default(), text).await?,
     })
 }
 
 #[tauri::command]
-pub async fn assistant_prompt_reset(svc: Svc<'_>) -> AppResult<PromptReset> {
+pub async fn assistant_prompt_reset(svc: Svc<'_>, scope: Option<Scope>) -> AppResult<PromptReset> {
     Ok(PromptReset {
-        text: svc.prompt_reset().await?,
+        text: svc.prompt_reset(scope.unwrap_or_default()).await?,
     })
 }
 
@@ -148,14 +153,15 @@ pub struct TranslateResult {
 }
 
 #[tauri::command]
-pub async fn translate_status(svc: Svc<'_>) -> AppResult<TranslateStatus> {
-    svc.translate_status().await
+pub async fn translate_status(svc: Svc<'_>, scope: Option<Scope>) -> AppResult<TranslateStatus> {
+    svc.translate_status_in(scope.into()).await
 }
 
 #[tauri::command]
 pub async fn translate_update(svc: Svc<'_>, patch: TranslatePatch) -> AppResult<TranslateStatus> {
+    let layer = Some(patch.scope).into();
     svc.translate_update(patch).await?;
-    svc.translate_status().await
+    svc.translate_status_in(layer).await
 }
 
 /// 日本語の入力を、選択中のモデルに合ったプロンプトへ翻訳・校正する(docs/34)。

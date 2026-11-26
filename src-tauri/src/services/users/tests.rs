@@ -447,11 +447,9 @@ async fn legacy_data_moves_to_the_first_user_without_moving_images() {
     h.svc.login(users[0].id.clone(), None).await.unwrap();
     let s = h.db.call(|c| settings::load(c)).await.unwrap();
     assert_eq!(s.theme, settings::Theme::Light);
-    // 画像は移動せず、保存先は従来の位置に固定される
-    assert_eq!(
-        s.images_dir.as_deref(),
-        Some(dir.join("images").to_str().unwrap())
-    );
+    // 画像は移動せず、場所は従来のまま。利用者が選んだものではないので、個別設定にはしない(docs/52 §5)
+    assert_eq!(s.images_dir, None);
+    assert_eq!(h.paths.resolve_images_dir(&s), dir.join("images"));
     assert_eq!(preset_count(&h).await, 1);
     let leftover: i64 = h
         .db
@@ -502,4 +500,41 @@ async fn set_color_only_for_the_logged_in_user_and_palette_colors() {
     );
     let list = h.svc.list().await.unwrap();
     assert_eq!(list.iter().find(|u| u.id == a.id).unwrap().color, "pink");
+}
+
+#[tokio::test]
+async fn delete_removes_the_users_folder_under_the_global_root_only() {
+    let h = harness();
+    let a = add(&h, "A").await;
+    let b = add(&h, "B").await;
+    let root = h
+        .dir
+        .parent()
+        .unwrap()
+        .join(format!("gazooo-images-root-{}", uuid::Uuid::now_v7()));
+    let of_b = root.join(&b.id);
+    let of_a = root.join(&a.id);
+    std::fs::create_dir_all(&of_b).unwrap();
+    std::fs::create_dir_all(&of_a).unwrap();
+    let value = serde_json::json!(root.to_string_lossy());
+    h.db.call_device(move |c| {
+        crate::db::scopes::write(
+            c,
+            crate::db::scopes::Scope::Global,
+            crate::db::scopes::KEY_IMAGES_ROOT,
+            Some(&value),
+        )
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        h.svc.delete_preview(b.id.clone()).await.unwrap(),
+        Some(of_b.to_string_lossy().into_owned())
+    );
+    h.svc.login(a.id.clone(), None).await.unwrap();
+    let result = h.svc.delete(b.id, None, None).await.unwrap();
+    assert_eq!(result.external_images_dir, None);
+    assert!(!of_b.exists());
+    assert!(of_a.exists(), "ほかのユーザーの画像は消さない");
+    let _ = std::fs::remove_dir_all(&root);
 }

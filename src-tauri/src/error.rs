@@ -54,6 +54,9 @@ pub enum AppError {
     /// バックアップ(docs/35)。`code` は `BACKUP_*`。
     #[error("{message}")]
     Backup { code: &'static str, message: String },
+    /// 保存先のデータ移行(docs/51)。`code` は `STORAGE_*`。
+    #[error("{message}")]
+    Migration { code: &'static str, message: String },
     /// ユーザー機能(docs/36)。`code` は `AUTH_*` / `USER_*`。`details` に `retryAfterMs` などを入れる。
     #[error("{message}")]
     User {
@@ -113,6 +116,13 @@ impl AppError {
         }
     }
 
+    pub fn migration(code: &'static str, message: impl Into<String>) -> Self {
+        Self::Migration {
+            code,
+            message: message.into(),
+        }
+    }
+
     pub fn engine_proc(code: &'static str, message: impl Into<String>) -> Self {
         Self::EngineProc {
             code,
@@ -165,6 +175,7 @@ impl AppError {
             Self::Models { code, .. } => code,
             Self::EngineProc { code, .. } => code,
             Self::Backup { code, .. } => code,
+            Self::Migration { code, .. } => code,
             Self::User { code, .. } => code,
             Self::NotLoggedIn => "NOT_LOGGED_IN",
             Self::Db(_) => "DB_ERROR",

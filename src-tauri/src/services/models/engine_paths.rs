@@ -51,14 +51,28 @@ fn quote(s: &str) -> AppResult<String> {
     Ok(out)
 }
 
+/// 追加で読むフォルダ。保存先を移行すると相対パスが変わらないため、同名のフォルダも読む(docs/51 §6)。
+const EXTRA: &[(&str, &str)] = &[
+    ("text_encoders", "text_encoders"),
+    ("diffusion_models", "diffusion_models"),
+];
+
 /// ファイルの内容。`models_dir` は絶対パス。
 pub fn render(models_dir: &Path) -> AppResult<String> {
+    render_with(models_dir, EXTRA)
+}
+
+fn render_with(models_dir: &Path, extra: &[(&str, &str)]) -> AppResult<String> {
     let base = quote(&models_dir.to_string_lossy())?;
     let mut out = format!(
         "{MARKER}\n# 設定の「ComfyUI に反映」で作成されました。手で編集しても構いませんが、印の行を消すと上書きされなくなります。\ngazooo:\n  base_path: {base}\n"
     );
     for (name, rel) in SECTIONS {
-        out.push_str(&format!("  {name}: {rel}/\n"));
+        match extra.iter().find(|(n, _)| n == name) {
+            // ComfyUI は、複数行の値を 1 行ずつのパスとして読む
+            Some((_, more)) => out.push_str(&format!("  {name}: |\n    {rel}/\n    {more}/\n")),
+            None => out.push_str(&format!("  {name}: {rel}/\n")),
+        }
     }
     Ok(out)
 }
@@ -92,11 +106,17 @@ fn write_failed(e: &std::io::Error) -> AppError {
 
 /// 反映済みか(アプリが書いた内容が、現在の保存先と一致している)。
 pub fn is_applied(file: &Path, models_dir: &Path) -> bool {
-    matches!(is_managed(file), Ok(Some(true)))
-        && render(models_dir)
-            .ok()
-            .zip(std::fs::read_to_string(file).ok())
-            .is_some_and(|(want, have)| want.replace("\r\n", "\n") == have.replace("\r\n", "\n"))
+    if !matches!(is_managed(file), Ok(Some(true))) {
+        return false;
+    }
+    let Ok(have) = std::fs::read_to_string(file) else {
+        return false;
+    };
+    let have = have.replace("\r\n", "\n");
+    // 以前の形式(追加のフォルダなし)で反映したものも、反映済みとみなす
+    [EXTRA, &[]]
+        .iter()
+        .any(|extra| render_with(models_dir, extra).is_ok_and(|want| want == have))
 }
 
 /// 設定ファイルを書く。ユーザー自身のファイルがあれば上書きしない。
@@ -190,6 +210,20 @@ mod tests {
 
         clear(&file).unwrap();
         assert!(!file.exists());
+    }
+
+    #[test]
+    fn renders_both_folders_and_accepts_the_previous_format() {
+        let engine = tmpdir("multi");
+        let models = tmpdir("multi-models");
+        let y = render(&models).unwrap();
+        assert!(y.contains("  text_encoders: |\n    clip/\n    text_encoders/\n"));
+        assert!(y.contains("  diffusion_models: |\n    unet/\n    diffusion_models/\n"));
+        let file = engine.join(FILE_NAME);
+        let old = render_with(&models, &[]).unwrap();
+        assert!(old.contains("  text_encoders: clip/\n"));
+        std::fs::write(&file, old).unwrap();
+        assert!(is_applied(&file, &models));
     }
 
     #[test]

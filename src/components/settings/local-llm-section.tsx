@@ -21,10 +21,10 @@ import { Switch } from "@/components/ui/switch";
 import { canRelease, canStart, formatMemory, installPercent, isInstalling } from "@/lib/llm/logic";
 import type { MessageKey } from "@/lib/i18n";
 import { useErrorMessage, useT } from "@/lib/i18n/use-t";
-import { assistantLocalCheck, assistantUpdate, type LocalCheck } from "@/lib/tauri/assistant";
+import { assistantLocalCheck, assistantUpdate, type AssistantStatus, type LocalCheck } from "@/lib/tauri/assistant";
+import type { SettingsScope } from "@/lib/tauri/settings";
 import { toAppError } from "@/lib/tauri/errors";
 import { IDLE_MINUTES_CHOICES, type LlmState } from "@/lib/tauri/llm";
-import { useAssistantStore } from "@/stores/assistant-store";
 import { useLlmStore } from "@/stores/llm-store";
 
 const STATE_LABEL: Record<LlmState, MessageKey> = {
@@ -329,16 +329,21 @@ function ConsentDialog({
  * 外部サーバ(Ollama・llama-server・LM Studio 等。docs/11 §13)の接続先。ループバックのみ。
  * アプリは起動・メモリ管理をしない。
  */
-export function ExternalServerSection() {
+export function ExternalServerSection({
+  status,
+  scope,
+  onSaved,
+}: {
+  status: AssistantStatus;
+  scope: SettingsScope;
+  onSaved: () => Promise<void>;
+}) {
   const t = useT();
   const errorMessage = useErrorMessage();
-  const status = useAssistantStore((s) => s.status);
-  const setStatus = useAssistantStore((s) => s.setStatus);
   const [url, setUrl] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [check, setCheck] = useState<LocalCheck | null>(null);
   const [busy, setBusy] = useState(false);
-  if (!status) return null;
 
   const urlValue = url ?? status.localBaseUrl;
   const modelValue = model ?? status.localModel;
@@ -357,7 +362,8 @@ export function ExternalServerSection() {
 
   const save = () =>
     run(async () => {
-      setStatus(await assistantUpdate({ localBaseUrl: urlValue, localModel: modelValue }));
+      await assistantUpdate({ localBaseUrl: urlValue, localModel: modelValue, scope });
+      await onSaved();
       setUrl(null);
       setModel(null);
       setCheck(null);

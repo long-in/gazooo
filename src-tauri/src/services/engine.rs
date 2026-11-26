@@ -179,7 +179,12 @@ pub async fn monitor(app: AppHandle) {
                 None => None,
             };
             let enabled = cfg.as_ref().is_some_and(|c| c.enabled && c.auto_recover);
+            // 保存先のデータ移行中は、停止させた ComfyUI を復旧しない(docs/51 §5)
+            let migrating = app
+                .try_state::<crate::commands::storage::MigrationFlag>()
+                .is_some_and(|f| f.is_active());
             let eligible = enabled
+                && !migrating
                 && proc.as_ref().is_some_and(|p| {
                     matches!(p.state().status, ProcStatus::Running | ProcStatus::Crashed)
                 });

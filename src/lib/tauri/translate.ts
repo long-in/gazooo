@@ -1,5 +1,6 @@
 import type { AssistantProvider } from "./assistant";
 import { invoke } from "./invoke";
+import type { SettingsScope } from "./settings";
 import type { LlmStatus } from "./llm";
 import type { GenerationParams } from "./jobs";
 
@@ -38,6 +39,7 @@ export interface TranslateStatus {
 }
 
 export interface TranslatePatch {
+  scope?: SettingsScope;
   provider?: AssistantProvider;
   model?: string;
   mtModel?: TranslateEngine;
@@ -55,8 +57,8 @@ export interface TranslateTarget {
 /** 入力の最大文字数(Rust の `MAX_INPUT_CHARS` と同じ)。 */
 export const MAX_TRANSLATE_INPUT_CHARS = 2000;
 
-export const translateStatus = () =>
-  invoke<TranslateStatus>("translate_status");
+export const translateStatus = (scope?: SettingsScope) =>
+  invoke<TranslateStatus>("translate_status", { scope: scope ?? null });
 
 export const translateUpdate = (patch: TranslatePatch) =>
   invoke<TranslateStatus>("translate_update", { patch });

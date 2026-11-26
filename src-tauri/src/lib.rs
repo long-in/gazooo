@@ -9,7 +9,7 @@ mod util;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use crate::db::Db;
 use crate::services::assistant::AssistantService;
@@ -74,12 +74,29 @@ impl AppPaths {
         }
     }
 
+    /// ログイン中のユーザーの ID(作業スペースのフォルダ名)。
+    pub fn current_user_id(&self) -> Option<String> {
+        self.current_user_dir()
+            .and_then(|d| d.file_name().and_then(|n| n.to_str()).map(str::to_owned))
+    }
+
+    /// ログイン中のユーザーが使う画像の場所(個別 → 全体 → 標準。docs/52 §4.1)。
     pub fn resolve_images_dir(&self, settings: &Settings) -> PathBuf {
-        settings
-            .images_dir
-            .as_ref()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| self.default_images_dir())
+        match &settings.images_dir {
+            Some(dir) => PathBuf::from(dir),
+            None => self.standard_images_dir(settings),
+        }
+    }
+
+    /// 個別設定がないときの画像の場所。
+    pub fn standard_images_dir(&self, settings: &Settings) -> PathBuf {
+        services::image_locations::location(
+            &self.data_dir,
+            self.current_user_id().as_deref(),
+            None,
+            settings.images_root.as_deref(),
+            settings.legacy_images_user.as_deref(),
+        )
     }
 }
 
@@ -88,169 +105,11 @@ struct LogGuard(#[allow(dead_code)] tracing_appender::non_blocking::WorkerGuard)
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
-            let data_dir = app.path().app_data_dir()?;
-            let log_dir = app.path().app_log_dir()?;
-            std::fs::create_dir_all(&data_dir)?;
-            std::fs::create_dir_all(&log_dir)?;
-
-            // ログ(docs/31)。起動直後は INFO のみ。デバッグの設定は DB を開いた後に反映する
-            let (debug_log, guard) = services::debug_log::DebugLog::init(&log_dir)?;
-            app.manage(LogGuard(guard));
-
-            // 端末共通の DB(ユーザー一覧・端末の設定)。ユーザーの DB はログイン時に開く(docs/36)
-            let app_db = data_dir.join("app.db");
-            let db = Db::new(&app_db)?;
-            let paths = AppPaths::new(data_dir);
-            let users = services::users::UserService::new(&app_db, db.clone(), paths.clone())?;
-            app.manage(Arc::clone(&users));
-
-            let comfyui_url = tauri::async_runtime::block_on(
-                db.call_device(|c| services::settings::get_comfyui_url(c)),
-            )?;
-
-            // デバッグログの ON/OFF を復元し、ON の間は合計サイズを定期的に整理する(docs/31)
-            if tauri::async_runtime::block_on(
-                db.call_device(|c| services::settings::get_debug_enabled(c)),
-            )? {
-                debug_log.set_enabled(true);
-                let managed = tauri::async_runtime::block_on(
-                    db.call_device(|c| services::settings::get_managed_engine(c)),
-                )?
-                .enabled;
-                debug_log.log_environment(&services::debug_log::describe_environment(
-                    &app.package_info().version.to_string(),
-                    &comfyui_url,
-                    managed,
-                    true,
-                ));
-            }
-            tauri::async_runtime::spawn(Arc::clone(&debug_log).run_pruner());
-            app.manage(debug_log);
-
-            let engine = Arc::new(EngineService::new(&comfyui_url)?);
-            let jobs = JobService::new(
-                db.clone(),
-                Arc::clone(&engine),
-                Arc::new(TauriSink(app.handle().clone())),
-                paths.clone(),
-            );
-            let images = ImageService::new(
-                db.clone(),
-                Arc::new(TauriSink(app.handle().clone())),
-                paths.clone(),
-                Arc::new(OsTrash),
-            );
-            // モデル取得(docs/12)。ダウンロードはユーザーの操作で開始されたものだけをキューで実行する
-            let model_policy = DownloadPolicy::production();
-            let models = ModelService::new(
-                db.clone(),
-                Arc::clone(&engine),
-                Arc::new(Catalog::embedded(&model_policy)?),
-                model_policy,
-                Arc::new(TauriSink(app.handle().clone())),
-            )?;
-            tauri::async_runtime::spawn(Arc::clone(&models).run_worker());
-            app.manage(models);
-            let storage = StorageService::new(db.clone(), paths.clone(), Arc::new(OsTrash));
-            app.manage(Arc::new(PresetService::new(db.clone())));
-            app.manage(ProjectService::new(
-                db.clone(),
-                Arc::new(TauriSink(app.handle().clone())),
-            ));
-            let assistant = AssistantService::new(
-                db.clone(),
-                AnthropicClient::new()?,
-                Arc::new(TauriSink(app.handle().clone())),
-            );
-            // ローカル LLM(docs/30)。導入・起動・メモリ解放をアプリが管理する
-            let llm = services::llm::LlmService::new(
-                db.clone(),
-                paths.data_dir.join("llm"),
-                services::llm::manifest::Manifest::embedded()?,
-                Arc::new(TauriSink(app.handle().clone())),
-                Some(log_dir.join("llm.log")),
-            );
-            assistant.set_runtime(llm.clone());
-            // 翻訳専用モデル(docs/34 §9.13)。本体とは別のディレクトリ・マニフェスト。同時には起動しない
-            let mt = services::llm::LlmService::new_mt(
-                db.clone(),
-                paths.data_dir.join("llm-mt"),
-                services::llm::manifest::Manifest::embedded_mt()?,
-                Arc::new(services::events::TauriMtSink(app.handle().clone())),
-                Some(log_dir.join("llm-mt.log")),
-            );
-            services::llm::LlmService::link_peers(&llm, &mt);
-            assistant.set_mt_runtime(mt.clone());
-            jobs.set_generation_hook(llm.clone());
-            tauri::async_runtime::spawn(Arc::clone(&llm).run_idle_monitor());
-            tauri::async_runtime::spawn(Arc::clone(&mt).run_idle_monitor());
-            app.manage(assistant);
-            app.manage(llm);
-            app.manage(services::llm::MtLlm(mt));
-            app.manage(storage);
-            // バックアップ(docs/35)。設定値・ギャラリー・プリセットの取得と復元
-            app.manage(services::backup::BackupService::new(
-                db.clone(),
-                paths.clone(),
-                Arc::new(OsTrash),
-                Arc::new(commands::backup::TauriBackupSink(app.handle().clone())),
-                app.package_info().version.to_string(),
-            ));
-            app.manage(engine);
-            app.manage(Arc::clone(&jobs));
-            app.manage(InputService::new(
-                db.clone(),
-                paths.clone(),
-                Arc::clone(&images),
-            ));
-            app.manage(Arc::clone(&images));
-            app.manage(services::convert::ConvertService::new());
-            app.manage(commands::images::ExportJobs::default());
-            // ComfyUI の起動管理(docs/15)。アプリが起動した子プロセスだけを管理し、終了時に停止する
-            let engine_proc = EngineProcess::new(
-                Arc::new(TauriSink(app.handle().clone())),
-                Some(log_dir.join("comfyui.log")),
-            );
-            app.manage(Arc::clone(&engine_proc));
-            // ComfyUI のアプリ内インストール(docs/23)。利用者の操作で開始されたときだけ動く
-            app.manage(services::engine_install::EngineInstaller::new(
-                paths.data_dir.join("comfyui"),
-                services::engine_install::manifest::Manifest::embedded()?,
-                Arc::new(TauriSink(app.handle().clone())),
-            ));
-            {
-                let db = db.clone();
-                tauri::async_runtime::spawn(async move {
-                    match db
-                        .call_device(|c| services::settings::get_managed_engine(c))
-                        .await
-                    {
-                        Ok(cfg) if cfg.enabled && cfg.auto_start => {
-                            if let Err(e) = engine_proc.start(&cfg).await {
-                                tracing::warn!(error = %e, "comfyui auto start failed");
-                            }
-                        }
-                        Ok(_) => {}
-                        Err(e) => tracing::warn!(error = %e, "managed engine config unreadable"),
-                    }
-                });
-            }
-            tauri::async_runtime::spawn(services::engine::monitor(app.handle().clone()));
-            // ジョブのワーカー。ログインするまでは待機する。前回の実行中ジョブの復旧は、ログイン時に行う(docs/36)
-            tauri::async_runtime::spawn(async move {
-                jobs.run_worker().await;
-            });
-
-            tracing::info!("gazooo started");
-            app.manage(db);
-            app.manage(paths);
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
+    let migrating = commands::storage::MigrationFlag::default();
+    let setup_flag = migrating.clone();
+    let gate = migrating.clone();
+    let handler: Box<dyn Fn(tauri::ipc::Invoke) -> bool + Send + Sync> =
+        Box::new(tauri::generate_handler![
             commands::user::user_list,
             commands::user::user_current,
             commands::user::user_create,
@@ -263,6 +122,10 @@ pub fn run() {
             commands::user::user_lock_clear,
             commands::settings::settings_get,
             commands::settings::settings_update,
+            commands::settings::settings_scope_get,
+            commands::settings::settings_scope_set,
+            commands::settings::settings_scope_reset_global,
+            commands::user::user_delete_preview,
             commands::debug::debug_status,
             commands::debug::debug_set_enabled,
             commands::debug::debug_export_logs,
@@ -380,8 +243,209 @@ pub fn run() {
             commands::models::models_set_dir,
             commands::models::models_engine_dir_status,
             commands::models::models_apply_dir_to_engine,
-        ])
+            commands::storage::storage_migration_plan,
+            commands::storage::storage_migration_start,
+            commands::storage::storage_migration_cancel,
+            commands::storage::storage_migration_quit,
+        ]);
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .setup(move |app| {
+            let data_dir = app.path().app_data_dir()?;
+            let log_dir = app.path().app_log_dir()?;
+            std::fs::create_dir_all(&data_dir)?;
+            std::fs::create_dir_all(&log_dir)?;
+
+            // ログ(docs/31)。起動直後は INFO のみ。デバッグの設定は DB を開いた後に反映する
+            let (debug_log, guard) = services::debug_log::DebugLog::init(&log_dir)?;
+            app.manage(LogGuard(guard));
+
+            // 端末共通の DB(ユーザー一覧・端末の設定)。ユーザーの DB はログイン時に開く(docs/36)
+            let app_db = data_dir.join("app.db");
+            let db = Db::new(&app_db)?;
+            let paths = AppPaths::new(data_dir);
+            let users = services::users::UserService::new(&app_db, db.clone(), paths.clone())?;
+            app.manage(Arc::clone(&users));
+
+            let comfyui_url = tauri::async_runtime::block_on(
+                db.call_device(|c| services::settings::get_comfyui_url(c)),
+            )?;
+
+            // デバッグログの ON/OFF を復元し、ON の間は合計サイズを定期的に整理する(docs/31)
+            if tauri::async_runtime::block_on(
+                db.call_device(|c| services::settings::get_debug_enabled(c)),
+            )? {
+                debug_log.set_enabled(true);
+                let managed = tauri::async_runtime::block_on(
+                    db.call_device(|c| services::settings::get_managed_engine(c)),
+                )?
+                .enabled;
+                debug_log.log_environment(&services::debug_log::describe_environment(
+                    &app.package_info().version.to_string(),
+                    &comfyui_url,
+                    managed,
+                    true,
+                ));
+            }
+            tauri::async_runtime::spawn(Arc::clone(&debug_log).run_pruner());
+            app.manage(debug_log);
+
+            let engine = Arc::new(EngineService::new(&comfyui_url)?);
+            let jobs = JobService::new(
+                db.clone(),
+                Arc::clone(&engine),
+                Arc::new(TauriSink(app.handle().clone())),
+                paths.clone(),
+            );
+            let images = ImageService::new(
+                db.clone(),
+                Arc::new(TauriSink(app.handle().clone())),
+                paths.clone(),
+                Arc::new(OsTrash),
+            );
+            // モデル取得(docs/12)。ダウンロードはユーザーの操作で開始されたものだけをキューで実行する
+            let model_policy = DownloadPolicy::production();
+            let models = ModelService::new(
+                db.clone(),
+                Arc::clone(&engine),
+                Arc::new(Catalog::embedded(&model_policy)?),
+                model_policy,
+                Arc::new(TauriSink(app.handle().clone())),
+            )?;
+            tauri::async_runtime::spawn(Arc::clone(&models).run_worker());
+            app.manage(models);
+            let storage = StorageService::new(db.clone(), paths.clone());
+            app.manage(setup_flag.clone());
+            app.manage(services::migration::MigrationService::new(
+                db.clone(),
+                paths.clone(),
+                Arc::new(OsTrash),
+                Arc::new(commands::storage::TauriMigrationHost(app.handle().clone())),
+                Arc::new(commands::storage::TauriMigrationSink(app.handle().clone())),
+                setup_flag.0.clone(),
+            ));
+            app.manage(Arc::new(PresetService::new(db.clone())));
+            app.manage(ProjectService::new(
+                db.clone(),
+                Arc::new(TauriSink(app.handle().clone())),
+            ));
+            let assistant = AssistantService::new(
+                db.clone(),
+                AnthropicClient::new()?,
+                Arc::new(TauriSink(app.handle().clone())),
+            );
+            // ローカル LLM(docs/30)。導入・起動・メモリ解放をアプリが管理する
+            let llm = services::llm::LlmService::new(
+                db.clone(),
+                paths.data_dir.join("llm"),
+                services::llm::manifest::Manifest::embedded()?,
+                Arc::new(TauriSink(app.handle().clone())),
+                Some(log_dir.join("llm.log")),
+            );
+            assistant.set_runtime(llm.clone());
+            // 翻訳専用モデル(docs/34 §9.13)。本体とは別のディレクトリ・マニフェスト。同時には起動しない
+            let mt = services::llm::LlmService::new_mt(
+                db.clone(),
+                paths.data_dir.join("llm-mt"),
+                services::llm::manifest::Manifest::embedded_mt()?,
+                Arc::new(services::events::TauriMtSink(app.handle().clone())),
+                Some(log_dir.join("llm-mt.log")),
+            );
+            services::llm::LlmService::link_peers(&llm, &mt);
+            assistant.set_mt_runtime(mt.clone());
+            jobs.set_generation_hook(llm.clone());
+            tauri::async_runtime::spawn(Arc::clone(&llm).run_idle_monitor());
+            tauri::async_runtime::spawn(Arc::clone(&mt).run_idle_monitor());
+            app.manage(assistant);
+            app.manage(llm);
+            app.manage(services::llm::MtLlm(mt));
+            app.manage(storage);
+            // バックアップ(docs/35)。設定値・ギャラリー・プリセットの取得と復元
+            app.manage(services::backup::BackupService::new(
+                db.clone(),
+                paths.clone(),
+                Arc::new(OsTrash),
+                Arc::new(commands::backup::TauriBackupSink(app.handle().clone())),
+                app.package_info().version.to_string(),
+            ));
+            app.manage(engine);
+            app.manage(Arc::clone(&jobs));
+            app.manage(InputService::new(
+                db.clone(),
+                paths.clone(),
+                Arc::clone(&images),
+            ));
+            app.manage(Arc::clone(&images));
+            app.manage(services::convert::ConvertService::new());
+            app.manage(commands::images::ExportJobs::default());
+            // ComfyUI の起動管理(docs/15)。アプリが起動した子プロセスだけを管理し、終了時に停止する
+            let engine_proc = EngineProcess::new(
+                Arc::new(TauriSink(app.handle().clone())),
+                Some(log_dir.join("comfyui.log")),
+            );
+            app.manage(Arc::clone(&engine_proc));
+            // ComfyUI のアプリ内インストール(docs/23)。利用者の操作で開始されたときだけ動く
+            app.manage(services::engine_install::EngineInstaller::new(
+                paths.data_dir.join("comfyui"),
+                services::engine_install::manifest::Manifest::embedded()?,
+                Arc::new(TauriSink(app.handle().clone())),
+            ));
+            {
+                let db = db.clone();
+                tauri::async_runtime::spawn(async move {
+                    match db
+                        .call_device(|c| services::settings::get_managed_engine(c))
+                        .await
+                    {
+                        Ok(cfg) if cfg.enabled && cfg.auto_start => {
+                            if let Err(e) = engine_proc.start(&cfg).await {
+                                tracing::warn!(error = %e, "comfyui auto start failed");
+                            }
+                        }
+                        Ok(_) => {}
+                        Err(e) => tracing::warn!(error = %e, "managed engine config unreadable"),
+                    }
+                });
+            }
+            tauri::async_runtime::spawn(services::engine::monitor(app.handle().clone()));
+            // ジョブのワーカー。ログインするまでは待機する。前回の実行中ジョブの復旧は、ログイン時に行う(docs/36)
+            tauri::async_runtime::spawn(async move {
+                jobs.run_worker().await;
+            });
+
+            tracing::info!("gazooo started");
+            app.manage(db);
+            app.manage(paths);
+            Ok(())
+        })
+        // 保存先のデータ移行中は、データを変える操作を入口で断る(docs/51 §5)
+        .invoke_handler(move |invoke| {
+            if gate.is_active()
+                && commands::storage::blocked_during_migration(invoke.message.command())
+            {
+                invoke.resolver.reject(
+                    serde_json::to_value(error::AppError::migration(
+                        "STORAGE_BUSY",
+                        "データの移行中は実行できません",
+                    ))
+                    .unwrap_or_default(),
+                );
+                return true;
+            }
+            handler(invoke)
+        })
         .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let app = window.app_handle();
+                if app
+                    .try_state::<commands::storage::MigrationFlag>()
+                    .is_some_and(|f| f.is_active())
+                {
+                    api.prevent_close();
+                    let _ = app.emit("storage://close-requested", ());
+                }
+            }
             // 変換ページへのドラッグ&ドロップ(docs/43 §3.2。パスは Rust 側だけで扱う)
             if let tauri::WindowEvent::DragDrop(e) = event {
                 use tauri::DragDropEvent;
@@ -400,6 +464,17 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
+            // macOS の ⌘Q などウィンドウを閉じない終了も、移行中は確認する
+            if let tauri::RunEvent::ExitRequested {
+                api, code: None, ..
+            } = &event
+                && app
+                    .try_state::<commands::storage::MigrationFlag>()
+                    .is_some_and(|f| f.is_active())
+            {
+                api.prevent_exit();
+                let _ = app.emit("storage://close-requested", ());
+            }
             // アプリが起動した ComfyUI は、終了時に確実に止める(異常終了時は Job Object / プロセスグループが止める)
             if let tauri::RunEvent::Exit = event
                 && let Some(llm) = app.try_state::<Arc<services::llm::LlmService>>()

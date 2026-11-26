@@ -13,6 +13,7 @@ pub mod images;
 pub mod jobs;
 pub mod presets;
 pub mod projects;
+pub mod scopes;
 
 use crate::error::{AppError, AppResult};
 
@@ -37,16 +38,9 @@ pub fn is_device_key(key: &str) -> bool {
             | "engine.comfyui.managed"
             | "engine.comfyui.models_dir"
             | "debug.enabled"
+            | "storage.images_root"
+            | "storage.legacy_images_user"
     ) || key.starts_with("llm.")
-}
-
-/// 設定キーの保存先テーブル(接続には `app.db` が `app` として ATTACH されている)。
-pub fn settings_table(key: &str) -> &'static str {
-    if is_device_key(key) {
-        "app.device_settings"
-    } else {
-        "main.settings"
-    }
 }
 
 /// 全サービスが共有する DB のハンドル。ログイン中のユーザーの DB に差し替わる(docs/36 §6)。

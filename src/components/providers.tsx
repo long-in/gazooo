@@ -34,6 +34,7 @@ import {
   onQueueState,
 } from "@/lib/tauri/events";
 import { toAppError } from "@/lib/tauri/errors";
+import { settingsGet } from "@/lib/tauri/settings";
 import { useAssistantStore } from "@/stores/assistant-store";
 import { useEngineInstallStore } from "@/stores/engine-install-store";
 import { useEngineProcessStore } from "@/stores/engine-process-store";
@@ -84,6 +85,27 @@ function SettingsBootstrap() {
   useEffect(() => {
     document.documentElement.dataset.density = density;
   }, [density]);
+
+  return null;
+}
+
+/** ユーザーの選択画面(ログイン前)には、全体設定のテーマと言語を使う(docs/52 §3)。 */
+function GateSettings() {
+  const { setTheme } = useTheme();
+  const language = useLanguage();
+
+  useEffect(() => {
+    void settingsGet("global")
+      .then((settings) => {
+        useSettingsStore.setState({ settings });
+        setTheme(settings.theme);
+      })
+      .catch(() => {});
+  }, [setTheme]);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
 
   return null;
 }
@@ -401,7 +423,13 @@ function UserBoundary({ children }: { children: ReactNode }) {
   }, []);
 
   if (phase === "loading") return null;
-  if (phase === "gate") return <UserGate />;
+  if (phase === "gate")
+    return (
+      <>
+        <GateSettings />
+        <UserGate />
+      </>
+    );
   return (
     <>
       <SettingsBootstrap />

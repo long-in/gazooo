@@ -1,10 +1,10 @@
 //! 設定の読み書き(docs/03-data-model.md「設定キー」)。`settings` テーブルの KV を型付きで扱う。
 
-use rusqlite::{Connection, params};
+use rusqlite::Connection;
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::db::scopes::{self, Layer, Scope};
 use crate::error::{AppError, AppResult};
-use crate::util::now_ms;
 
 pub const DEFAULT_COMFYUI_URL: &str = "http://127.0.0.1:8188";
 
@@ -35,8 +35,13 @@ pub enum Language {
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
     pub comfyui_url: String,
-    /// `None` はアプリデータ配下の既定ディレクトリを使うことを意味する。
+    /// 画像の保存先の個別設定。`None` は全体設定を使う。
     pub images_dir: Option<String>,
+    /// 画像の保存先の全体設定。`None` はアプリのデータ内。
+    pub images_root: Option<String>,
+    /// 以前の版の画像の場所を使い続けるユーザー(docs/52 §5)。
+    #[serde(skip)]
+    pub legacy_images_user: Option<String>,
     pub theme: Theme,
     /// `None` は OS のロケールに従う。
     pub language: Option<Language>,
@@ -52,6 +57,8 @@ impl Default for Settings {
         Self {
             comfyui_url: DEFAULT_COMFYUI_URL.to_string(),
             images_dir: None,
+            images_root: None,
+            legacy_images_user: None,
             theme: Theme::default(),
             language: None,
             generation_defaults: None,
@@ -60,10 +67,12 @@ impl Default for Settings {
     }
 }
 
-/// 部分更新。`imagesDir` / `language` は「未指定(変更しない)」と「null(既定に戻す)」を区別する。
+/// 部分更新。`scope` は、上書きできる項目(テーマ・言語)の書き込み先。`imagesDir` / `language` は「未指定(変更しない)」と「null(既定に戻す)」を区別する。
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsPatch {
+    #[serde(default)]
+    pub scope: Scope,
     pub comfyui_url: Option<String>,
     #[serde(default, deserialize_with = "double_option")]
     pub images_dir: Option<Option<String>>,
@@ -85,44 +94,15 @@ where
 }
 
 fn get_raw(conn: &Connection, key: &str) -> AppResult<Option<serde_json::Value>> {
-    let raw: Option<String> = conn
-        .query_row(
-            &format!(
-                "SELECT value_json FROM {} WHERE key = ?1",
-                crate::db::settings_table(key)
-            ),
-            [key],
-            |r| r.get(0),
-        )
-        .map(Some)
-        .or_else(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => Ok(None),
-            other => Err(other),
-        })?;
-    Ok(raw.map(|s| serde_json::from_str(&s)).transpose()?)
+    scopes::get_json(conn, Layer::Effective, key)
 }
 
 fn set_raw(conn: &Connection, key: &str, value: &serde_json::Value) -> AppResult<()> {
-    conn.execute(
-        &format!(
-            "INSERT INTO {} (key, value_json, updated_at) VALUES (?1, ?2, ?3)
-             ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at",
-            crate::db::settings_table(key)
-        ),
-        params![key, value.to_string(), now_ms()],
-    )?;
-    Ok(())
+    scopes::write(conn, Scope::User, key, Some(value))
 }
 
 fn delete_raw(conn: &Connection, key: &str) -> AppResult<()> {
-    conn.execute(
-        &format!(
-            "DELETE FROM {} WHERE key = ?1",
-            crate::db::settings_table(key)
-        ),
-        [key],
-    )?;
-    Ok(())
+    scopes::write(conn, Scope::User, key, None)
 }
 
 fn parse<T: serde::de::DeserializeOwned>(v: Option<serde_json::Value>) -> Option<T> {
@@ -136,14 +116,35 @@ pub fn get_comfyui_url(conn: &Connection) -> AppResult<String> {
 }
 
 pub fn load(conn: &Connection) -> AppResult<Settings> {
+    load_in(conn, Layer::Effective)
+}
+
+/// 全体の画像の保存先と、以前の版の場所を使うユーザー。
+pub fn global_images(conn: &Connection) -> AppResult<(Option<String>, Option<String>)> {
+    Ok((
+        parse(get_raw(conn, scopes::KEY_IMAGES_ROOT)?),
+        parse(get_raw(conn, scopes::KEY_LEGACY_IMAGES_USER)?),
+    ))
+}
+
+/// `Layer::Global` は全体設定の値(ログイン前でも読める。個人の項目は空)。
+pub fn load_in(conn: &Connection, layer: Layer) -> AppResult<Settings> {
     let d = Settings::default();
+    let get = |key: &str| scopes::get_json(conn, layer, key);
+    let personal = |key: &str| match layer {
+        Layer::Effective => get_raw(conn, key),
+        Layer::Global => Ok(None),
+    };
+    let (images_root, legacy_images_user) = global_images(conn)?;
     Ok(Settings {
-        comfyui_url: parse(get_raw(conn, KEY_COMFYUI_URL)?).unwrap_or(d.comfyui_url),
-        images_dir: parse(get_raw(conn, KEY_IMAGES_DIR)?),
-        theme: parse(get_raw(conn, KEY_THEME)?).unwrap_or(d.theme),
-        language: parse(get_raw(conn, KEY_LANGUAGE)?),
-        generation_defaults: get_raw(conn, KEY_GENERATION_DEFAULTS)?.filter(|v| v.is_object()),
-        ui_state: get_raw(conn, KEY_UI_STATE)?.filter(|v| v.is_object()),
+        comfyui_url: parse(get(KEY_COMFYUI_URL)?).unwrap_or(d.comfyui_url),
+        images_dir: parse(personal(KEY_IMAGES_DIR)?),
+        images_root,
+        legacy_images_user,
+        theme: parse(get(KEY_THEME)?).unwrap_or(d.theme),
+        language: parse(get(KEY_LANGUAGE)?),
+        generation_defaults: personal(KEY_GENERATION_DEFAULTS)?.filter(|v| v.is_object()),
+        ui_state: personal(KEY_UI_STATE)?.filter(|v| v.is_object()),
     })
 }
 
@@ -208,14 +209,22 @@ pub fn set_debug_enabled(conn: &Connection, enabled: bool) -> AppResult<()> {
 const KEY_CONVERT: &str = "convert.settings";
 
 pub fn get_convert(conn: &Connection) -> AppResult<crate::services::convert::ConvertSettings> {
-    Ok(parse(get_raw(conn, KEY_CONVERT)?).unwrap_or_default())
+    get_convert_in(conn, Layer::Effective)
+}
+
+pub fn get_convert_in(
+    conn: &Connection,
+    layer: Layer,
+) -> AppResult<crate::services::convert::ConvertSettings> {
+    Ok(parse(scopes::get_json(conn, layer, KEY_CONVERT)?).unwrap_or_default())
 }
 
 pub fn set_convert(
     conn: &Connection,
+    scope: Scope,
     cfg: &crate::services::convert::ConvertSettings,
 ) -> AppResult<()> {
-    set_raw(conn, KEY_CONVERT, &serde_json::to_value(cfg)?)
+    scopes::write(conn, scope, KEY_CONVERT, Some(&serde_json::to_value(cfg)?))
 }
 
 const KEY_EXPORT_DIR: &str = "gallery.export_dir";
@@ -283,6 +292,7 @@ pub fn update(conn: &mut Connection, patch: SettingsPatch) -> AppResult<Settings
         ));
     }
 
+    let scope = patch.scope;
     let tx = conn.transaction()?;
     if let Some(url) = url {
         set_raw(&tx, KEY_COMFYUI_URL, &serde_json::json!(url))?;
@@ -293,12 +303,12 @@ pub fn update(conn: &mut Connection, patch: SettingsPatch) -> AppResult<Settings
         None => {}
     }
     if let Some(theme) = patch.theme {
-        set_raw(&tx, KEY_THEME, &serde_json::to_value(theme)?)?;
+        let value = serde_json::to_value(theme)?;
+        scopes::write(&tx, scope, KEY_THEME, Some(&value))?;
     }
-    match patch.language {
-        Some(Some(lang)) => set_raw(&tx, KEY_LANGUAGE, &serde_json::to_value(lang)?)?,
-        Some(None) => delete_raw(&tx, KEY_LANGUAGE)?,
-        None => {}
+    if let Some(language) = patch.language {
+        let value = language.map(serde_json::to_value).transpose()?;
+        scopes::write(&tx, scope, KEY_LANGUAGE, value.as_ref())?;
     }
     match patch.generation_defaults {
         Some(Some(v)) => set_raw(&tx, KEY_GENERATION_DEFAULTS, &v)?,

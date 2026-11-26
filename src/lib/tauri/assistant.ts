@@ -1,4 +1,5 @@
 import { invoke } from "./invoke";
+import type { SettingsScope } from "./settings";
 import type { GenerationParams } from "./jobs";
 
 /** AI サポート(docs/11-ai-assistant.md、docs/04-ipc-api.md「AI サポート」)。キー本体は取得できない。 */
@@ -92,13 +93,16 @@ export interface AskStarted {
   assistantMessageId: string;
 }
 
-export const assistantStatus = () => invoke<AssistantStatus>("assistant_status");
+export const assistantStatus = (scope?: SettingsScope) =>
+  invoke<AssistantStatus>("assistant_status", { scope: scope ?? null });
 
 export const assistantSetKey = (key: string) => invoke<{ verified: boolean }>("assistant_set_key", { key });
 
 export const assistantClearKey = () => invoke<void>("assistant_clear_key");
 
 export interface AssistantPatch {
+  /** 上書きできる項目の書き込み先(省略時は個別設定)。同意は常に本人のもの。 */
+  scope?: SettingsScope;
   model?: string;
   consent?: boolean;
   autoDelete?: boolean;
@@ -124,11 +128,14 @@ export interface PromptState {
 /** 保存できる最大文字数(Rust 側と同じ)。 */
 export const MAX_SYSTEM_PROMPT_CHARS = 30000;
 
-export const assistantPromptGet = () => invoke<PromptState>("assistant_prompt_get");
+export const assistantPromptGet = (scope?: SettingsScope) =>
+  invoke<PromptState>("assistant_prompt_get", { scope: scope ?? null });
 
-export const assistantPromptSet = (text: string) => invoke<{ customized: boolean }>("assistant_prompt_set", { text });
+export const assistantPromptSet = (text: string, scope?: SettingsScope) =>
+  invoke<{ customized: boolean }>("assistant_prompt_set", { text, scope: scope ?? null });
 
-export const assistantPromptReset = () => invoke<{ text: string }>("assistant_prompt_reset");
+export const assistantPromptReset = (scope?: SettingsScope) =>
+  invoke<{ text: string }>("assistant_prompt_reset", { scope: scope ?? null });
 
 export const assistantAsk = (
   conversationId: string | null,
