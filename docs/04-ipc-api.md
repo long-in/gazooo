@@ -205,17 +205,23 @@ type SettingsPatch = Partial<Settings>;
 - 型・検証・取得の仕様は 12 が正。`settings_update` は `engine.comfyui.models_dir` を受け付けない(`models_set_dir` で検証つきで変更)。
 - イベント `models://progress` / `models://done`(下記)。エラー: `MODELS_DIR_UNKNOWN` / `MODELS_NO_CONSENT` / `MODELS_HOST_NOT_ALLOWED` / `MODELS_DISK_FULL` / `MODELS_DOWNLOAD_FAILED` / `MODELS_HASH_MISMATCH` / `MODELS_ALREADY_INSTALLED` / `MODELS_NOT_FOUND`。
 
-### 保存先の変更(Q-11)
+### 保存先の変更とデータの移行(Q-11、v0.52 で改訂。設計: 51)
 
 | コマンド | 引数 | 戻り値 | 説明 |
 |---|---|---|---|
-| `storage_change_images_dir` | `{ newDir: string \| null; moveExisting: boolean }` | `{ moved: number; missing: number }` | 画像の保存先を変更する。`newDir = null` は既定(`{app_data}/images`)に戻す |
+| `storage_change_images_dir` | `{ scope: "global" \| "user"; newDir: string \| null }` | – | 画像の保存先を切り替える(**ファイルは移さない**)。`newDir = null` は、個別なら全体設定、全体なら標準値に戻す |
+| `storage_migration_plan` | `{ target: "imagesGlobal" \| "imagesUser" \| "models"; newDir: string \| null }` | `MigrationPlan` | 移行の内容を確認する(何も変更しない)。`newDir = null` は、全体なら標準値、個別なら全体設定に戻す(モデルでは不可) |
+| `storage_migration_start` | 同上 | `MigrationReport` | 移行を実行する(完了まで返らない)。成功すると移行先が保存先になる。事前確認はやり直す |
+| `storage_migration_cancel` | – | – | コピー中なら中止する |
+| `storage_migration_quit` | – | – | 中止して(切り替え以降なら完了を待って)アプリを終了する |
 
-- `moveExisting = true`: 既存画像(原寸・サムネイル)を新しい保存先へ **コピー → 検証 → 設定を切り替え → 旧ファイルを OS のゴミ箱へ移動** の順で行う。コピーに失敗したら、作ったコピーを削除して中止し、設定は変えない。`moved` はコピーしたファイル数、`missing` は元ファイルが無くスキップした数。
-- `moveExisting = false`: 設定だけを切り替える。**既存画像のファイルは旧フォルダに残るが、DB には保存先からの相対パスしか無いため、保存先を元に戻すまで表示できなくなる**(UI の確認ダイアログで明示する)。
-- 次の場合は実行しない: 新しい保存先が相対パス / 現在の保存先と入れ子(内側・外側)/ 書き込めない(`VALIDATION`、`details.field = "newDir"`)、生成ジョブが実行中(`JOB_INVALID_STATE`)。現在の保存先と同じなら何もしない(`moved = 0`)。
-- 成功時、新しい保存先を asset プロトコルのスコープに追加する。
-- 大量の画像では時間がかかる(進捗イベントは未提供。UI は処理中表示のみ)。
+- `MigrationPlan` / `MigrationReport` の形は [51 §7](51-storage-migration.md)、型の定義は `src/lib/tauri/storage.ts`。
+- イベント: `storage://migration-progress`(`{ phase: "copying" | "switching" | "cleaning"; doneBytes; totalBytes; doneFiles; totalFiles; currentFile? }`)、`storage://close-requested`(移行中にアプリを閉じようとした)。
+- エラー: `STORAGE_BUSY` / `STORAGE_CANCELLED` / `STORAGE_NO_SPACE` / `STORAGE_CONFLICT` / `VALIDATION`(`details.field = "newDir"`)。
+- 移行中は、画像・保存先・ComfyUI・ユーザーを変えるコマンドを `STORAGE_BUSY` で断る(対象の一覧は `commands/storage.rs`)。
+- `storage_change_images_dir` は、相対パス・書き込めない場所(`VALIDATION`)と、生成ジョブの実行中(`JOB_INVALID_STATE`)は実行しない。
+- 画像の保存先が変わったら、新しい保存先を asset プロトコルのスコープに追加する。
+
 ### ComfyUI の起動管理(v0.7、設計: 15 §7。承認済み)
 
 | コマンド | 引数 | 戻り値 |
@@ -351,3 +357,17 @@ type SettingsPatch = Partial<Settings>;
 - エラー: 出力先の未設定・書き込み不可は `VALIDATION`(`details.field = "outputDir"`)。
 - 既存コマンド: `input_image_pick`・`input_image_pick_many`・`input_image_from_gallery` の取り込み対象に WebP を加える(保存は従来どおり `inputs/<uuid>.png`)。
 - 詳細は [43-image-convert.md](43-image-convert.md) §8・§9。
+
+## 追記(v0.53・承認済み・実装済み): 全体設定と個別設定(52)
+
+| コマンド | 引数 | 戻り値 |
+|---|---|---|
+| `settings_scope_get` | – | 個別設定にしている組の一覧 |
+| `settings_scope_set` | `{ group; overridden: boolean }` | – (個別にすると全体の値を写す。戻すと個別の値を消す) |
+| `settings_scope_reset_global` | `{ group }` | – (全体設定の組を標準値に戻す) |
+| `user_delete_preview` | `{ id }` | 削除で一緒に消える画像フォルダ(`string \| null`) |
+
+- `group`: `theme` / `language` / `assistantConnection` / `assistantPrompt` / `assistantAutoDelete` / `translate` / `convert`。
+- `settings_get`・`assistant_status`・`assistant_prompt_*`・`translate_status`・`convert_settings_*`・`convert_pick_output_dir` に任意の引数 `scope` を、`settings_update`・`assistant_update`・`translate_update` の `patch` に `scope` を追加した。読み取りの `"global"` は全体の値、省略時は実際に使う値。書き込みの省略時は個別。個人の項目は `scope` に関係なくユーザーに保存する。
+- `settings_get({ scope: "global" })` は、ログイン前も呼べる。
+- `Settings` に `imagesRoot` を追加した。

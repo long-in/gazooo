@@ -70,6 +70,10 @@ pub struct JobService {
     recovery_hold: AtomicBool,
     /// 接続断で止まった実行中ジョブを、失敗にせず待機の先頭へ戻す(自動復旧が有効なとき)。
     recovery_requeue: AtomicBool,
+    /// 保存先のデータ移行中は、次のジョブを始めない(docs/51 §5)。
+    storage_hold: AtomicBool,
+    /// ジョブの開始(取り出しから running への変更まで)と、移行の開始がすれ違わないようにする。
+    start_gate: tokio::sync::Mutex<()>,
     /// ジョブごとの自動再実行の回数(メモリ上。アプリ再起動で 0 に戻る)。
     requeue_counts: Mutex<std::collections::HashMap<String, u32>>,
 }
@@ -92,6 +96,8 @@ impl JobService {
             hook: std::sync::OnceLock::new(),
             recovery_hold: AtomicBool::new(false),
             recovery_requeue: AtomicBool::new(false),
+            storage_hold: AtomicBool::new(false),
+            start_gate: tokio::sync::Mutex::new(()),
             requeue_counts: Mutex::new(std::collections::HashMap::new()),
         })
     }
@@ -101,6 +107,17 @@ impl JobService {
         self.recovery_requeue.store(requeue, Ordering::SeqCst);
         let was = self.recovery_hold.swap(hold, Ordering::SeqCst);
         if was && !hold {
+            self.wake.notify_one();
+        }
+    }
+
+    /// 次のジョブの開始を止める / 再開する(保存先のデータ移行中)。止めるときは、
+    /// 開始処理の途中のジョブが running になるまで待つ(呼び出し側は、そのあと実行中を確認できる)。
+    pub async fn set_storage_hold(&self, hold: bool) {
+        self.storage_hold.store(hold, Ordering::SeqCst);
+        if hold {
+            drop(self.start_gate.lock().await);
+        } else {
             self.wake.notify_one();
         }
     }
@@ -432,10 +449,20 @@ impl JobService {
                 let _ = tokio::time::timeout(Duration::from_secs(1), self.wake.notified()).await;
                 continue;
             }
+            let gate = self.start_gate.lock().await;
+            if self.storage_hold.load(Ordering::SeqCst) {
+                drop(gate);
+                let _ = tokio::time::timeout(Duration::from_secs(1), self.wake.notified()).await;
+                continue;
+            }
             match self.db.call(|c| repo::next_queued(c)).await {
-                Ok(Some(row)) => self.execute(row).await,
-                Ok(None) => self.wake.notified().await,
+                Ok(Some(row)) => self.execute(row, gate).await,
+                Ok(None) => {
+                    drop(gate);
+                    self.wake.notified().await;
+                }
                 Err(e) => {
+                    drop(gate);
                     tracing::error!(error = %e, "job worker: failed to fetch next job");
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
@@ -443,7 +470,7 @@ impl JobService {
         }
     }
 
-    async fn execute(&self, row: JobRow) {
+    async fn execute(&self, row: JobRow, gate: tokio::sync::MutexGuard<'_, ()>) {
         let id = row.id.clone();
         let started = self
             .db
@@ -452,6 +479,7 @@ impl JobService {
                 move |c| repo::mark_running(c, &id, now_ms())
             })
             .await;
+        drop(gate);
         match started {
             Ok(true) => {}
             Ok(false) => return, // 直前に取り消された
@@ -1213,7 +1241,8 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        h.svc.execute(row).await;
+        let gate = h.svc.start_gate.lock().await;
+        h.svc.execute(row, gate).await;
         assert_eq!(status_of(&h, &stuck).await, JobStatus::Queued);
         let next = h
             .svc
@@ -1256,6 +1285,19 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(150)).await;
         assert_eq!(status_of(&h, &id).await, JobStatus::Queued);
         h.svc.set_recovery(false, true);
+        wait_for_status(&h, &id, JobStatus::Completed).await;
+    }
+
+    #[tokio::test]
+    async fn worker_does_not_start_jobs_while_storage_is_migrating() {
+        let h = harness();
+        h.svc.set_storage_hold(true).await;
+        tokio::spawn(h.svc.clone().run_worker());
+        let id = h.svc.enqueue(params("ok"), 1).await.unwrap()[0].id.clone();
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        assert_eq!(status_of(&h, &id).await, JobStatus::Queued);
+        assert!(h.engine.submitted.lock().unwrap().is_empty());
+        h.svc.set_storage_hold(false).await;
         wait_for_status(&h, &id, JobStatus::Completed).await;
     }
 

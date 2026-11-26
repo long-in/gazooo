@@ -14,7 +14,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::AppPaths;
 use crate::db::Db;
+use crate::db::scopes;
 use crate::error::{AppError, AppResult};
+use crate::services::image_locations as locations;
 use crate::util::now_ms;
 
 pub const MAX_USERS: i64 = 20;
@@ -118,6 +120,7 @@ pub struct UserService {
     store: Mutex<Connection>,
     db: Db,
     paths: AppPaths,
+    app_db: std::path::PathBuf,
     current: RwLock<Option<String>>,
 }
 
@@ -130,10 +133,21 @@ impl UserService {
             migrate::migrate_legacy(&paths, &store)?;
             tracing::info!("legacy data migrated to the first user");
         }
+        // 全体の移行はログインしていないユーザーも扱うため、起動時に全員分を引き継ぐ(docs/52 §5)
+        let ids: Vec<String> = store
+            .prepare("SELECT id FROM users")?
+            .query_map([], |r| r.get(0))?
+            .collect::<Result<_, _>>()?;
+        for id in ids {
+            if let Err(e) = upgrade_settings(app_db, &paths, &id) {
+                tracing::warn!(user = %id, error = %e, "could not upgrade user settings");
+            }
+        }
         Ok(Arc::new(Self {
             store: Mutex::new(store),
             db,
             paths,
+            app_db: app_db.to_path_buf(),
             current: RwLock::new(None),
         }))
     }
@@ -284,6 +298,10 @@ impl UserService {
             let workspace = s.paths.user_workspace(&row.id);
             std::fs::create_dir_all(&workspace)?;
             s.db.attach_user(&workspace.join(migrate::LEGACY_DB))?;
+            // バックアップから戻した以前の版の設定も、ここで引き継ぐ
+            if let Err(e) = upgrade_settings(&s.app_db, &s.paths, &row.id) {
+                tracing::warn!(user = %row.id, error = %e, "could not upgrade user settings");
+            }
             s.paths.set_user_dir(Some(workspace));
             if let Ok(mut g) = s.current.write() {
                 *g = Some(row.id.clone());
@@ -362,6 +380,12 @@ impl UserService {
         .await
     }
 
+    /// 削除で一緒に消える、全体の保存先の中の画像フォルダ(無ければ `None`。docs/52 §4.5)。
+    pub async fn delete_preview(self: &Arc<Self>, id: String) -> AppResult<Option<String>> {
+        let all = locations::all(&self.db, &self.paths).await?;
+        Ok(managed_images_dir(&all, &id).map(|d| d.to_string_lossy().into_owned()))
+    }
+
     /// 作業スペースを完全に削除する(ゴミ箱へは移さない。docs/36 §5.5)。
     pub async fn delete(
         self: &Arc<Self>,
@@ -369,6 +393,7 @@ impl UserService {
         secret: Option<String>,
         confirm_name: Option<String>,
     ) -> AppResult<DeleteResult> {
+        let all = locations::all(&self.db, &self.paths).await?;
         self.blocking(move |s| {
             if s.current_id().as_deref() == Some(id.as_str()) {
                 return Err(AppError::validation(
@@ -397,7 +422,21 @@ impl UserService {
                 }
             }
             let workspace = s.paths.user_workspace(&id);
-            let external = external_images_dir(&workspace);
+            let managed = managed_images_dir(&all, &id);
+            // 個別の場所と、以前の版の場所は自動では削除せず、知らせる
+            let external = all
+                .users
+                .iter()
+                .find(|u| u.id == id)
+                .filter(|u| managed.is_none() && !u.dir.starts_with(&workspace) && u.dir.is_dir())
+                .map(|u| u.dir.to_string_lossy().into_owned());
+            if let Some(dir) = &managed {
+                match std::fs::remove_dir_all(dir) {
+                    Ok(()) => {}
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => return Err(e.into()),
+                }
+            }
             match std::fs::remove_dir_all(&workspace) {
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -506,19 +545,31 @@ fn ensure_name_free(c: &Connection, name: &str, except: Option<&str>) -> AppResu
     Ok(())
 }
 
-/// 削除するユーザーが作業スペースの外に画像保存先を持っていれば、そのパス(読み取り専用で調べる)。
-fn external_images_dir(workspace: &Path) -> Option<String> {
-    let db = workspace.join(migrate::LEGACY_DB);
-    let c = Connection::open_with_flags(&db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
-    let raw: String = c
-        .query_row(
-            "SELECT value_json FROM settings WHERE key = 'storage.images_dir'",
-            [],
-            |r| r.get(0),
-        )
-        .ok()?;
-    let dir: String = serde_json::from_str(&raw).ok()?;
-    (!Path::new(&dir).starts_with(workspace)).then_some(dir)
+/// 全体の保存先の中に、アプリが作ったそのユーザーの画像フォルダ。ほかのユーザーと重なるなら対象にしない。
+fn managed_images_dir(all: &locations::Locations, id: &str) -> Option<std::path::PathBuf> {
+    let user = all.users.iter().find(|u| u.id == id)?;
+    let root = all.root.as_deref()?;
+    let managed = Path::new(root).join(id);
+    let used_by_others = all
+        .users
+        .iter()
+        .any(|u| u.id != id && locations::overlaps(&u.dir, &managed));
+    (user.readable && user.individual.is_none() && !used_by_others && managed.is_dir())
+        .then_some(managed)
+}
+
+/// ユーザーの DB の設定を、全体 / 個別の区分へ引き継ぐ(一度だけ)。DB がまだ無ければ何もしない。
+fn upgrade_settings(app_db: &Path, paths: &AppPaths, id: &str) -> AppResult<()> {
+    let path = paths.user_workspace(id).join(migrate::LEGACY_DB);
+    if !path.is_file() {
+        return Ok(());
+    }
+    let c = Connection::open(&path)?;
+    c.execute(
+        "ATTACH DATABASE ?1 AS app",
+        [app_db.to_string_lossy().as_ref()],
+    )?;
+    scopes::upgrade_user(&c, &paths.data_dir, id)
 }
 
 #[cfg(test)]

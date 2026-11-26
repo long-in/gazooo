@@ -8,6 +8,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::db::Db;
+use crate::db::scopes::{Layer, Scope};
 use crate::error::{AppError, AppResult};
 use crate::services::convert::{
     ConvertEntry, ConvertEvents, ConvertOptions, ConvertService, ConvertSettings,
@@ -79,8 +80,10 @@ fn view(app: &AppHandle, s: ConvertSettings) -> ConvertSettingsView {
 pub async fn convert_settings_get(
     app: AppHandle,
     db: State<'_, Db>,
+    scope: Option<Scope>,
 ) -> AppResult<ConvertSettingsView> {
-    let s = db.call(|c| settings::get_convert(c)).await?;
+    let layer = Layer::from(scope);
+    let s = db.call(move |c| settings::get_convert_in(c, layer)).await?;
     Ok(view(&app, s))
 }
 
@@ -89,12 +92,15 @@ pub async fn convert_settings_update(
     app: AppHandle,
     db: State<'_, Db>,
     patch: ConvertSettingsPatch,
+    scope: Option<Scope>,
 ) -> AppResult<ConvertSettingsView> {
+    let layer = Layer::from(scope);
+    let scope = scope.unwrap_or_default();
     let s = db
         .call(move |c| {
-            let mut s = settings::get_convert(c)?;
+            let mut s = settings::get_convert_in(c, layer)?;
             s.apply(patch)?;
-            settings::set_convert(c, &s)?;
+            settings::set_convert(c, scope, &s)?;
             Ok(s)
         })
         .await?;
@@ -106,6 +112,7 @@ pub async fn convert_settings_update(
 pub async fn convert_pick_output_dir(
     app: AppHandle,
     db: State<'_, Db>,
+    scope: Option<Scope>,
 ) -> AppResult<Option<ConvertSettingsView>> {
     let handle = app.clone();
     let picked = tokio::task::spawn_blocking(move || handle.dialog().file().blocking_pick_folder())
@@ -124,11 +131,13 @@ pub async fn convert_pick_output_dir(
         ));
     }
     let d = dir.to_string_lossy().into_owned();
+    let layer = Layer::from(scope);
+    let scope = scope.unwrap_or_default();
     let s = db
         .call(move |c| {
-            let mut s = settings::get_convert(c)?;
+            let mut s = settings::get_convert_in(c, layer)?;
             s.output_dir = Some(d);
-            settings::set_convert(c, &s)?;
+            settings::set_convert(c, scope, &s)?;
             Ok(s)
         })
         .await?;

@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useErrorMessage, useT } from "@/lib/i18n/use-t";
 import { type AppError, toAppError } from "@/lib/tauri/errors";
-import type { UserSummary } from "@/lib/tauri/user";
+import { type UserSummary, userDeletePreview } from "@/lib/tauri/user";
 import {
   colorClass,
   formatRemaining,
@@ -364,6 +364,11 @@ function ManageDialog({
   const [confirmName, setConfirmName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [managedDir, setManagedDir] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode === "delete") void userDeletePreview(user.id).then(setManagedDir).catch(() => {});
+  }, [mode, user.id]);
 
   async function run() {
     setBusy(true);
@@ -408,6 +413,11 @@ function ManageDialog({
           </DialogTitle>
           {mode === "delete" && (
             <DialogDescription>{t("user.delete.warning")}</DialogDescription>
+          )}
+          {mode === "delete" && managedDir && (
+            <p className="break-all text-sm text-destructive">
+              {t("user.delete.imagesDir")} {managedDir}
+            </p>
           )}
         </DialogHeader>
         {mode === "rename" && (

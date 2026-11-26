@@ -372,3 +372,7 @@ CREATE TABLE device_settings (               -- 端末の設定(settings と同�
 ## 20. 追記(v0.33): 色の後からの変更
 
 ナビ上部のユーザーのメニューから、ログイン中の本人がアバターの色を変更できる(`user_set_color`)。色はアプリのアクセント色にも連動する。詳細は [38-simple-mode-and-accent.md](38-simple-mode-and-accent.md) §3。
+
+## 追記(v0.53・承認済み・実装済み): 全体設定と個別設定
+
+§4 の設定の区分と、§8 の「画像保存先を旧位置に固定する」扱いは、[52-global-and-user-settings.md](52-global-and-user-settings.md) で改めた。使う値は「個別設定(あれば)→ 全体設定 → 標準値」で決まる。ユーザーの削除では、全体の保存先の中にあるそのユーザーの画像フォルダも削除する。

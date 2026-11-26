@@ -1,6 +1,7 @@
 "use client";
 
 import { FolderOpen } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -205,6 +206,9 @@ export function ModelsView() {
               <FolderOpen className="size-3.5" />
               {t("models.dir.change")}
             </Button>
+            <Link href="/settings?scope=global&tab=storage" className="text-xs font-medium underline underline-offset-2">
+              {t("settings.storage.migrate")}
+            </Link>
             {view?.modelsDirSource === "setting" && (
               <Button variant="ghost" size="sm" onClick={() => void changeDir(null)}>
                 {t("models.dir.auto")}

@@ -18,9 +18,10 @@ import {
   type PromptState,
 } from "@/lib/tauri/assistant";
 import { toAppError } from "@/lib/tauri/errors";
+import type { SettingsScope } from "@/lib/tauri/settings";
 
 /** システムプロンプトの編集・保存・初期値に戻す(docs/11 §12)。操作した時点で即時に保存する。 */
-export function AssistantPromptEditor() {
+export function AssistantPromptEditor({ scope }: { scope: SettingsScope }) {
   const t = useT();
   const errorMessage = useErrorMessage();
   const [state, setState] = useState<PromptState | null>(null);
@@ -29,7 +30,7 @@ export function AssistantPromptEditor() {
   const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
-    void assistantPromptGet()
+    void assistantPromptGet(scope === "global" ? "global" : undefined)
       .then((s) => {
         setState(s);
         setText(s.text);
@@ -55,14 +56,14 @@ export function AssistantPromptEditor() {
 
   const save = () =>
     run(async () => {
-      const r = await assistantPromptSet(text);
+      const r = await assistantPromptSet(text, scope);
       setState({ ...state, text, customized: r.customized });
       toast.success(t("settings.assistant.prompt.saved"));
     });
 
   const reset = () =>
     run(async () => {
-      const r = await assistantPromptReset();
+      const r = await assistantPromptReset(scope);
       setState({ ...state, text: r.text, defaultText: r.text, customized: false });
       setText(r.text);
       toast.success(t("settings.assistant.prompt.resetDone"));

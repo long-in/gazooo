@@ -13,6 +13,7 @@ import { detectMac, modifierLabel } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
 import { ImageTagDialog } from "@/components/generate/image-tag-dialog";
+import { MigrationDialog } from "@/components/storage/migration-dialog";
 import { UserMenu } from "@/components/users/user-menu";
 
 import { StatusBar } from "./status-bar";
@@ -98,6 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </header>
           <main className="min-h-0 flex-1 overflow-y-auto bg-canvas">{children}</main>
           <ImageTagDialog />
+          <MigrationDialog />
         </div>
       </div>
       <StatusBar />

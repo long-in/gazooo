@@ -1,136 +1,223 @@
 "use client";
 
-import { open } from "@tauri-apps/plugin-dialog";
-import { useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { reloadAfterStorageChange } from "@/components/storage/migration-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useErrorMessage, useT } from "@/lib/i18n/use-t";
 import { toAppError } from "@/lib/tauri/errors";
-import { storageChangeImagesDir } from "@/lib/tauri/storage";
-import { useGalleryStore } from "@/stores/gallery-store";
+import type { SettingsScope } from "@/lib/tauri/settings";
+import { pickStorageDir, storageChangeImagesDir } from "@/lib/tauri/storage";
+import { useMigrationStore } from "@/stores/migration-store";
+import { useModelsStore } from "@/stores/models-store";
 import { useSettingsStore } from "@/stores/settings-store";
 
+import { ScopeChoice } from "./overridable";
+
+function Card({
+  id,
+  title,
+  note,
+  value,
+  header,
+  children,
+}: {
+  id: string;
+  title: string;
+  note?: string;
+  value: string;
+  header?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Label htmlFor={id}>{title}</Label>
+        {header}
+      </div>
+      {note && <p className="text-xs text-muted-foreground">{note}</p>}
+      <Input id={id} readOnly value={value} title={value} />
+      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
+    </div>
+  );
+}
+
 /**
- * 画像の保存先(docs/04-ipc-api.md「保存先の変更」)。
- * 変更は既存画像の扱いを伴うため、フォームの「保存」とは別に、確認ダイアログを経て即時に実行する。
+ * 画像の保存先の変更(全体 / 個別で共通)。[データを移行…] と、ファイルを移さない切り替え。
  */
-export function StorageSection() {
+function useImagesSwitch(scope: SettingsScope) {
   const t = useT();
   const errorMessage = useErrorMessage();
-  const imagesDir = useSettingsStore((s) => s.settings.imagesDir);
+  // 「移行せずに変更」で選んだ保存先(確認待ち)
+  const [switchTo, setSwitchTo] = useState<string | null>(null);
 
-  // 選択済みで、既存画像の扱いの決定待ちの保存先(null = 既定に戻す)
-  const [pending, setPending] = useState<{ dir: string | null } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function pick() {
+  async function run(action: () => Promise<void>) {
     try {
-      const selected = await open({ directory: true, multiple: false });
-      if (typeof selected === "string") {
-        setError(null);
-        setPending({ dir: selected });
-      }
+      await action();
     } catch (e) {
       toast.error(errorMessage(toAppError(e)));
     }
   }
 
-  async function run(moveExisting: boolean) {
-    if (!pending) return;
-    setBusy(true);
-    setError(null);
+  const pick = () => void run(async () => setSwitchTo(await pickStorageDir()));
+  const confirm = () =>
+    void run(async () => {
+      const dir = switchTo;
+      setSwitchTo(null);
+      if (dir === null) return;
+      await storageChangeImagesDir(scope, dir);
+      await reloadAfterStorageChange(scope === "global" ? "imagesGlobal" : "imagesUser");
+      toast.success(t("settings.storage.changed"));
+    });
+
+  const dialog = (
+    <ConfirmDialog
+      open={switchTo !== null}
+      title={t("settings.storage.switchTitle")}
+      description={`${t(scope === "global" ? "settings.storage.switchDescGlobal" : "settings.storage.switchDesc")} ${switchTo ?? ""}`}
+      confirmLabel={t("settings.storage.switchConfirm")}
+      cancelLabel={t("preset.cancel")}
+      destructive={false}
+      onOpenChange={(open) => !open && setSwitchTo(null)}
+      onConfirm={confirm}
+    />
+  );
+  return { pick, dialog };
+}
+
+const target = (scope: SettingsScope) => (scope === "global" ? "imagesGlobal" : "imagesUser");
+
+/** 移行先を決めずに(全体設定・標準値へ戻す)確認画面を開く。 */
+function openReset(scope: SettingsScope) {
+  useMigrationStore.getState().open(target(scope));
+  void useMigrationStore.getState().choose(null);
+}
+
+function UserImagesCard() {
+  const t = useT();
+  const imagesDir = useSettingsStore((s) => s.settings.imagesDir);
+  const imagesRoot = useSettingsStore((s) => s.settings.imagesRoot);
+  const { pick, dialog } = useImagesSwitch("user");
+  // [個別に設定する] を選んで、まだ移行先を決めていない状態
+  const [choosing, setChoosing] = useState(false);
+  const own = imagesDir !== null;
+
+  const globalLabel = imagesRoot ? `${imagesRoot} ${t("settings.storage.perUser")}` : t("settings.storage.default");
+
+  return (
+    <Card
+      id="images-dir"
+      title={t("settings.storage.imagesDir")}
+      note={t("settings.storage.userNote")}
+      value={imagesDir ?? globalLabel}
+      header={
+        <ScopeChoice
+          label={t("settings.storage.imagesDir")}
+          overridden={own || choosing}
+          onChange={(v) => {
+            setChoosing(v && !own);
+            if (!v && own) openReset("user");
+          }}
+        />
+      }
+    >
+      {(own || choosing) && (
+        <>
+          <Button type="button" onClick={() => useMigrationStore.getState().open("imagesUser")}>
+            {t("settings.storage.migrate")}
+          </Button>
+          <Button type="button" variant="outline" onClick={pick}>
+            {t("settings.storage.switchOnly")}
+          </Button>
+        </>
+      )}
+      {dialog}
+    </Card>
+  );
+}
+
+function GlobalImagesCard() {
+  const t = useT();
+  const imagesRoot = useSettingsStore((s) => s.settings.imagesRoot);
+  const { pick, dialog } = useImagesSwitch("global");
+  return (
+    <Card
+      id="images-root"
+      title={t("settings.storage.imagesRoot")}
+      note={t("settings.storage.globalNote")}
+      value={imagesRoot ?? t("settings.storage.default")}
+    >
+      <Button type="button" onClick={() => useMigrationStore.getState().open("imagesGlobal")}>
+        {t("settings.storage.migrate")}
+      </Button>
+      <Button type="button" variant="outline" onClick={pick}>
+        {t("settings.storage.switchOnly")}
+      </Button>
+      <Button type="button" variant="ghost" disabled={imagesRoot === null} onClick={() => openReset("global")}>
+        {t("settings.storage.reset")}
+      </Button>
+      {dialog}
+    </Card>
+  );
+}
+
+function ModelsCard() {
+  const t = useT();
+  const errorMessage = useErrorMessage();
+  const modelsDir = useModelsStore((s) => s.view?.modelsDir ?? null);
+  const modelsSource = useModelsStore((s) => s.view?.modelsDirSource);
+
+  useEffect(() => {
+    void useModelsStore.getState().load();
+  }, []);
+
+  async function changeOnly() {
     try {
-      const report = await storageChangeImagesDir(pending.dir, moveExisting);
-      await useSettingsStore.getState().load();
-      // 画像の絶対パスが変わるため、表示中の一覧を取り直す
-      void useGalleryStore.getState().reload();
-      setPending(null);
-      const detail = moveExisting
-        ? ` (${report.moved} ${t("settings.storage.movedCount")}${report.missing > 0 ? `、${report.missing} ${t("settings.storage.missingCount")}` : ""})`
-        : "";
-      toast.success(`${t("settings.storage.changed")}${detail}`);
+      const dir = await pickStorageDir();
+      if (dir === null) return;
+      await useModelsStore.getState().setDir(dir);
+      toast.success(t("settings.storage.changed"));
     } catch (e) {
-      setError(errorMessage(toAppError(e)));
-    } finally {
-      setBusy(false);
+      toast.error(errorMessage(toAppError(e)));
     }
   }
 
   return (
+    <Card
+      id="models-dir"
+      title={t("settings.storage.modelsDir")}
+      note={modelsSource === "detected" ? t("models.dir.source.detected") : undefined}
+      value={modelsDir ?? t("settings.storage.unknown")}
+    >
+      <Button type="button" disabled={modelsDir === null} onClick={() => useMigrationStore.getState().open("models")}>
+        {t("settings.storage.migrate")}
+      </Button>
+      <Button type="button" variant="outline" onClick={() => void changeOnly()}>
+        {t("settings.storage.switchOnly")}
+      </Button>
+      {modelsDir === null && <p className="w-full text-xs text-muted-foreground">{t("settings.storage.unknownHint")}</p>}
+    </Card>
+  );
+}
+
+/** 保存先(docs/51・52 §4)。操作はすぐ反映する。 */
+export function StorageSection({ scope }: { scope: SettingsScope }) {
+  const t = useT();
+  return (
     <section className="flex flex-col gap-3">
       <h2 className="text-lg font-medium">{t("settings.storage.title")}</h2>
-      <Label htmlFor="images-dir">{t("settings.storage.imagesDir")}</Label>
-      <div className="flex gap-2">
-        <Input id="images-dir" readOnly value={imagesDir ?? t("settings.storage.default")} />
-        <Button type="button" variant="outline" onClick={() => void pick()}>
-          {t("settings.storage.change")}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={imagesDir === null}
-          onClick={() => {
-            setError(null);
-            setPending({ dir: null });
-          }}
-        >
-          {t("settings.storage.reset")}
-        </Button>
-      </div>
-
-      <Dialog open={pending !== null} onOpenChange={(open) => !open && !busy && setPending(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("settings.storage.moveTitle")}</DialogTitle>
-            <DialogDescription>{t("settings.storage.moveDesc")}</DialogDescription>
-          </DialogHeader>
-
-          <div className="flex flex-col gap-3 text-sm">
-            <div>
-              <p className="text-xs text-muted-foreground">{t("settings.storage.newDir")}</p>
-              <p className="break-all font-mono text-xs">{pending?.dir ?? t("settings.storage.default")}</p>
-            </div>
-            <div className="rounded-lg border p-3">
-              <p className="font-medium">{t("settings.storage.moveYes")}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{t("settings.storage.moveYesNote")}</p>
-            </div>
-            <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
-              <p className="font-medium">{t("settings.storage.moveNo")}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{t("settings.storage.moveNoNote")}</p>
-            </div>
-            {busy && <p role="status" className="text-xs text-muted-foreground">{t("settings.storage.moveBusy")}</p>}
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" disabled={busy} onClick={() => setPending(null)}>
-              {t("preset.cancel")}
-            </Button>
-            <Button type="button" variant="outline" disabled={busy} onClick={() => void run(false)}>
-              {t("settings.storage.moveNo")}
-            </Button>
-            <Button type="button" disabled={busy} onClick={() => void run(true)}>
-              {t("settings.storage.moveYes")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {scope === "global" ? (
+        <>
+          <GlobalImagesCard />
+          <ModelsCard />
+        </>
+      ) : (
+        <UserImagesCard />
+      )}
     </section>
   );
 }

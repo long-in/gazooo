@@ -27,7 +27,7 @@ function DebugIndicator() {
   if (!enabled) return null;
   return (
     <Link
-      href="/settings?tab=other"
+      href="/settings?scope=global&tab=other"
       title={t("statusbar.debug.title")}
       className="ml-auto rounded bg-warning/20 px-1.5 font-medium text-warning hover:bg-warning/30"
     >

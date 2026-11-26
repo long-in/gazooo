@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -22,46 +22,47 @@ import {
   type AssistantProvider,
 } from "@/lib/tauri/assistant";
 import { toAppError } from "@/lib/tauri/errors";
+import type { SettingsScope } from "@/lib/tauri/settings";
+import { type TranslatePatch, type TranslateStatus, translateStatus, translateUpdate } from "@/lib/tauri/translate";
+import { Overridable } from "@/components/settings/overridable";
 import { useTranslateMtStore } from "@/stores/translate-mt-store";
 import { useTranslateStore } from "@/stores/translate-store";
 import { TranslateMtSection } from "@/components/settings/translate-mt-section";
 
 /**
- * プロンプト翻訳の設定(docs/34 §4)。AI サポートとは別に、送信先とモデルを選ぶ。
- * キー・同意・ローカル LLM は AI サポートと共通。操作した時点で即時に保存する。
+ * プロンプト翻訳の送信先とモデル(上書きできる組)。全体設定の値は画面内だけで持つ。
  */
-export function TranslateSection() {
+function TranslateFields({ scope }: { scope: SettingsScope }) {
   const t = useT();
   const errorMessage = useErrorMessage();
-  const status = useTranslateStore((s) => s.status);
+  const effective = useTranslateStore((s) => s.status);
+  const [global, setGlobal] = useState<TranslateStatus | null>(null);
   const mt = useTranslateMtStore((s) => s.status);
 
   useEffect(() => {
-    void useTranslateStore.getState().loadStatus();
+    if (scope === "global") void translateStatus("global").then(setGlobal).catch(() => {});
+    else void useTranslateStore.getState().loadStatus();
     void useTranslateMtStore.getState().load();
-  }, []);
+  }, [scope]);
 
+  const status = scope === "global" ? global : effective;
   if (!status) return null;
 
-  async function update(
-    patch: Parameters<
-      ReturnType<typeof useTranslateStore.getState>["update"]
-    >[0],
-  ) {
+  async function update(patch: TranslatePatch) {
     try {
-      await useTranslateStore.getState().update(patch);
+      if (scope === "global") {
+        setGlobal(await translateUpdate({ ...patch, scope }));
+        await useTranslateStore.getState().loadStatus();
+      } else {
+        await useTranslateStore.getState().update({ ...patch, scope });
+      }
     } catch (e) {
       toast.error(errorMessage(toAppError(e)));
     }
   }
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-lg font-medium">{t("settings.translate.title")}</h2>
-      <p className="text-sm text-muted-foreground">
-        {t("settings.translate.desc")}
-      </p>
-
+    <>
       <div className="flex flex-col gap-2">
         <Label>{t("settings.translate.provider")}</Label>
         <Select
@@ -140,8 +141,21 @@ export function TranslateSection() {
           {!mt?.installed && ` ${t("settings.translate.engine.needInstall")}`}
         </p>
       </div>
+    </>
+  );
+}
 
-      <TranslateMtSection />
+/** プロンプト翻訳の設定(docs/34 §4・52)。翻訳専用モデルの導入は、全体設定に置く。 */
+export function TranslateSection({ scope }: { scope: SettingsScope }) {
+  const t = useT();
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-lg font-medium">{t("settings.translate.title")}</h2>
+      <p className="text-sm text-muted-foreground">{t("settings.translate.desc")}</p>
+      <Overridable group="translate" scope={scope} label={t("settings.translate.title")}>
+        <TranslateFields scope={scope} />
+      </Overridable>
+      {scope === "global" && <TranslateMtSection />}
     </section>
   );
 }

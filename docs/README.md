@@ -58,6 +58,8 @@
 | 48 | [failed-job-deferral.md](48-failed-job-deferral.md) | 失敗したジョブの自動再試行(3 回続けて失敗したら待機の末尾へ後回し)の設計(v0.48) | 🟡 レビュー待ち(2026-11-25。07 B50・Q-415〜418) |
 | 49 | [gallery-delete-non-favorites.md](49-gallery-delete-non-favorites.md) | ギャラリーのお気に入り以外の一括削除(現在のスコープのお気に入り以外をゴミ箱へ。件数つき確認・`image_count_non_favorite` / `image_delete_non_favorite`・`STALE_COUNT` の安全弁)の設計(v0.49、M40)。04・05・09 への追記案を含む | 🟢 承認済み・実装済み(2026-11-25。07 Q-419〜426 は推奨どおり。Rust 510・Vitest 388・clippy・ESLint・tsc まで確認。画面の目視確認・macOS は未実施。差異は §8) |
 | 50 | [generate-form-two-columns.md](50-generate-form-two-columns.md) | 生成ページのスクロール一本化(実施済み)と、フォームの 2 列化(`xl` 以上。左 = 入力、右 = 調整)の設計(v0.51)。05・09 への追記案を含む | 🟡 レビュー待ち(2026-11-25。07 B53・Q-435〜438) |
+| 51 | [storage-migration.md](51-storage-migration.md) | 保存先のデータ移行(画像・モデル。移行先を選ぶ → 確認 → 進捗つきで移行 → 移行先を以後の保存先にする。モデルは ComfyUI への反映まで)の設計(v0.52、M41)。04・05・09 への追記案を含む | 🟢 承認済み・実装済み(2026-11-26。07 B54・Q-439〜444 は推奨どおり。Rust 520・Vitest 393・clippy・ESLint・静的エクスポートのビルドまで確認。画面の目視確認・実機での移行・macOS は未実施。差異は 51 §10) |
+| 52 | [global-and-user-settings.md](52-global-and-user-settings.md) | 全体設定と個別設定の分離(個別があれば全体を上書き。全体は標準値を持つ)と、画像の全体移行(対象は全体設定を使う全ユーザー)の設計(v0.53、M42)。36 §4 と 51 の画像の移行を改める。05 への追記案を含む | 🟢 承認済み・実装済み(2026-11-26。07 B55・Q-445〜450 は推奨どおり。Rust 532・Vitest 398・clippy・ESLint・静的エクスポートのビルドまで確認。画面の目視確認・実機・macOS は未実施。差異は 52 §9) |
 | — | [07 B7 / Q-52](07-open-questions.md) | アプリ名を `gazoo` から `gazooo` へ変更(識別子・DB・crate 名を含む全置換) | 🟢 承認済み・実装済み(2026-11-19。02・03・06・08〜13 とコード・設定・CI・README の名称を置換。旧印 `# managed by gazoo` は引き続き認識する) |
 
 ステータス凡例: 🟡 レビュー待ち / 🟢 承認済み / 🔴 要修正

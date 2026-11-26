@@ -9,6 +9,7 @@ use crate::db::Db;
 use crate::db::assistant::{
     self as store, AssistantStatus, Conversation, ConversationSummary, StoredSuggestion,
 };
+use crate::db::scopes::{Layer, Scope};
 use crate::domain::params::GenerationParams;
 use crate::error::{AppError, AppResult};
 
@@ -106,6 +107,8 @@ pub struct TranslateOutput {
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranslatePatch {
+    #[serde(default)]
+    pub scope: Scope,
     pub provider: Option<Provider>,
     pub model: Option<String>,
     pub mt_model: Option<store::MtModel>,
@@ -202,6 +205,9 @@ pub struct PromptState {
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AssistantPatch {
+    /// 上書きできる項目の書き込み先(docs/52)。
+    #[serde(default)]
+    pub scope: Scope,
     pub model: Option<String>,
     pub consent: Option<bool>,
     pub auto_delete: Option<bool>,
@@ -309,20 +315,20 @@ impl AssistantService {
         self.db
             .call(move |c| {
                 if let Some(m) = &patch.model {
-                    store::set_model(c, m)?;
+                    store::set_model(c, patch.scope, m)?;
                 }
                 if let Some(v) = patch.consent {
                     store::set_consent(c, v)?;
                 }
                 if let Some(v) = patch.auto_delete {
-                    store::set_auto_delete(c, v)?;
-                    if v {
+                    store::set_auto_delete(c, patch.scope, v)?;
+                    if v && store::status(c)?.auto_delete {
                         // 有効に戻した時点で、上限を超えた分をすぐ削除する(確認はフロントの責務)
                         store::enforce_limit(c)?;
                     }
                 }
                 if let Some(p) = patch.provider {
-                    store::set_provider(c, p)?;
+                    store::set_provider(c, patch.scope, p)?;
                 }
                 if patch.local_base_url.is_some() || patch.local_model.is_some() {
                     let url = patch
@@ -341,7 +347,7 @@ impl AssistantService {
                             "モデル名は 1〜200 文字で入力してください",
                         ));
                     }
-                    store::set_local_server(c, url.as_deref(), model)?;
+                    store::set_local_server(c, patch.scope, url.as_deref(), model)?;
                 }
                 store::status(c)
             })
@@ -349,8 +355,21 @@ impl AssistantService {
     }
 
     /// 編集欄に出す内容(docs/11 §12.5)。
+    /// 全体設定の画面向けに、指定した読み方の状態を返す。
+    pub async fn status_in(&self, layer: Layer) -> AppResult<AssistantStatus> {
+        self.db.call(move |c| store::status_in(c, layer)).await
+    }
+
+    #[cfg(test)]
     pub async fn prompt_get(&self) -> AppResult<PromptState> {
-        let custom = self.db.call(|c| store::system_prompt(c)).await?;
+        self.prompt_get_in(Layer::Effective).await
+    }
+
+    pub async fn prompt_get_in(&self, layer: Layer) -> AppResult<PromptState> {
+        let custom = self
+            .db
+            .call(move |c| store::system_prompt_in(c, layer))
+            .await?;
         let default_text = capabilities::default_prompt();
         Ok(PromptState {
             customized: custom.is_some(),
@@ -361,7 +380,7 @@ impl AssistantService {
     }
 
     /// 検証して保存する。初期値と完全一致なら未設定に戻す(= 未編集扱い)。
-    pub async fn prompt_set(&self, text: String) -> AppResult<bool> {
+    pub async fn prompt_set(&self, scope: Scope, text: String) -> AppResult<bool> {
         if text.trim().is_empty() {
             return Err(AppError::validation(
                 "text",
@@ -378,17 +397,19 @@ impl AssistantService {
         self.db
             .call(move |c| {
                 if same {
-                    store::clear_system_prompt(c)
+                    store::clear_system_prompt(c, scope)
                 } else {
-                    store::set_system_prompt(c, &text)
+                    store::set_system_prompt(c, scope, &text)
                 }
             })
             .await?;
         Ok(!same)
     }
 
-    pub async fn prompt_reset(&self) -> AppResult<String> {
-        self.db.call(|c| store::clear_system_prompt(c)).await?;
+    pub async fn prompt_reset(&self, scope: Scope) -> AppResult<String> {
+        self.db
+            .call(move |c| store::clear_system_prompt(c, scope))
+            .await?;
         Ok(capabilities::default_prompt())
     }
 
@@ -680,13 +701,18 @@ impl AssistantService {
     }
 
     /// プロンプト翻訳の設定と、今すぐ実行できるか(docs/34 §5)。
+    #[cfg(test)]
     pub async fn translate_status(&self) -> AppResult<TranslateStatus> {
+        self.translate_status_in(Layer::Effective).await
+    }
+
+    pub async fn translate_status_in(&self, layer: Layer) -> AppResult<TranslateStatus> {
         let local_installed = self.runtime.get().is_some_and(|r| r.installed());
         let mt_ok = self.mt_installed();
         self.db
             .call(move |c| {
-                let (provider, model) = store::translate_settings(c)?;
-                let mt_model = store::translate_mt_model(c)?;
+                let (provider, model) = store::translate_settings_in(c, layer)?;
+                let mt_model = store::translate_mt_model_in(c, layer)?;
                 let provider_reason = translate_target(c, provider, &model, local_installed)
                     .err()
                     .map(|r| r.0);
@@ -714,13 +740,13 @@ impl AssistantService {
         self.db
             .call(move |c| {
                 if let Some(p) = patch.provider {
-                    store::set_translate_provider(c, p)?;
+                    store::set_translate_provider(c, patch.scope, p)?;
                 }
                 if let Some(m) = &patch.model {
-                    store::set_translate_model(c, m)?;
+                    store::set_translate_model(c, patch.scope, m)?;
                 }
                 if let Some(mt) = patch.mt_model {
-                    store::set_translate_mt_model(c, mt)?;
+                    store::set_translate_mt_model(c, patch.scope, mt)?;
                 }
                 Ok(())
             })
@@ -1163,6 +1189,7 @@ data: {\"type\":\"message_stop\"}
         // 空・上限超えは拒否
         assert_eq!(
             svc.prompt_set(
+                crate::db::scopes::Scope::User,
                 "  
 "
                 .into()
@@ -1173,9 +1200,19 @@ data: {\"type\":\"message_stop\"}
             "VALIDATION"
         );
         let long = "あ".repeat(MAX_SYSTEM_PROMPT_CHARS + 1);
-        assert_eq!(svc.prompt_set(long).await.unwrap_err().code(), "VALIDATION");
+        assert_eq!(
+            svc.prompt_set(crate::db::scopes::Scope::User, long)
+                .await
+                .unwrap_err()
+                .code(),
+            "VALIDATION"
+        );
         // 保存すると編集済みになり、DB に入る
-        assert!(svc.prompt_set("カスタム".into()).await.unwrap());
+        assert!(
+            svc.prompt_set(crate::db::scopes::Scope::User, "カスタム".into())
+                .await
+                .unwrap()
+        );
         let g = svc.prompt_get().await.unwrap();
         assert!(g.customized && g.text == "カスタム");
         assert_eq!(
@@ -1186,11 +1223,22 @@ data: {\"type\":\"message_stop\"}
             Some("カスタム")
         );
         // 初期値と一致なら未設定に戻る
-        assert!(!svc.prompt_set(g.default_text.clone()).await.unwrap());
+        assert!(
+            !svc.prompt_set(crate::db::scopes::Scope::User, g.default_text.clone())
+                .await
+                .unwrap()
+        );
         assert!(!svc.prompt_get().await.unwrap().customized);
         // リセット
-        svc.prompt_set("もう一度".into()).await.unwrap();
-        assert_eq!(svc.prompt_reset().await.unwrap(), g.default_text);
+        svc.prompt_set(crate::db::scopes::Scope::User, "もう一度".into())
+            .await
+            .unwrap();
+        assert_eq!(
+            svc.prompt_reset(crate::db::scopes::Scope::User)
+                .await
+                .unwrap(),
+            g.default_text
+        );
         assert!(
             db.call(|c| store::system_prompt(c))
                 .await
@@ -1198,7 +1246,9 @@ data: {\"type\":\"message_stop\"}
                 .is_none()
         );
         // status に本文は含まれない
-        svc.prompt_set("秘密の文面".into()).await.unwrap();
+        svc.prompt_set(crate::db::scopes::Scope::User, "秘密の文面".into())
+            .await
+            .unwrap();
         let st = format!("{:?}", svc.status().await.unwrap());
         assert!(!st.contains("秘密の文面"));
     }

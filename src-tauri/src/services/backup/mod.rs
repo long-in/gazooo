@@ -217,6 +217,11 @@ impl BackupService {
         Ok(BusyGuard(&self.busy))
     }
 
+    /// バックアップの取得・復元を実行中か。
+    pub fn is_busy(&self) -> bool {
+        self.busy.load(Ordering::SeqCst)
+    }
+
     pub fn cancel(&self) {
         self.cancel.store(true, Ordering::SeqCst);
     }
@@ -382,17 +387,56 @@ impl BackupService {
 
     /// 復元後の画像保存先(設定値を復元するならバックアップの値、しなければ現在の値)。
     async fn target_images_dir(&self, include: &Include, staged: &Path) -> AppResult<PathBuf> {
-        if include.settings {
-            let staged = staged.to_path_buf();
-            let dir = tokio::task::spawn_blocking(move || restore::staged_images_dir(&staged))
-                .await
-                .map_err(|e| AppError::internal(e.to_string()))??;
-            Ok(dir
-                .map(PathBuf::from)
-                .unwrap_or_else(|| self.paths.default_images_dir()))
-        } else {
-            self.current_images_dir().await
+        if !include.settings {
+            return self.current_images_dir().await;
         }
+        match self.restorable_images_dir(staged).await?.0 {
+            Some(dir) => Ok(PathBuf::from(dir)),
+            None => {
+                let current = self.db.call(|c| settings::load(c)).await?;
+                Ok(self.paths.standard_images_dir(&current))
+            }
+        }
+    }
+
+    /// バックアップの個別の保存先と、それを戻せないか(docs/52 §6)。戻せないときは全体設定を使う。
+    async fn restorable_images_dir(&self, staged: &Path) -> AppResult<(Option<String>, bool)> {
+        let staged = staged.to_path_buf();
+        let dir = tokio::task::spawn_blocking(move || restore::staged_images_dir(&staged))
+            .await
+            .map_err(|e| AppError::internal(e.to_string()))??;
+        let Some(dir) = dir else {
+            return Ok((None, false));
+        };
+        let all = crate::services::image_locations::all(&self.db, &self.paths).await?;
+        let me = self.paths.current_user_id();
+        let data_dir = self.paths.data_dir.clone();
+        tokio::task::spawn_blocking(move || {
+            use crate::services::image_locations::overlaps;
+            let path = PathBuf::from(&dir);
+            let workspace = me.as_deref().map(|id| data_dir.join("users").join(id));
+            // 以前の版の固定の場所、ほかのユーザーの領域、使用中の場所は戻さない
+            let pinned =
+                crate::services::models::engine_paths::same_dir(&path, &data_dir.join("images"));
+            let foreign_workspace = path.starts_with(data_dir.join("users"))
+                && !workspace.is_some_and(|w| path.starts_with(w));
+            let in_use = all
+                .users
+                .iter()
+                .filter(|u| Some(u.id.as_str()) != me.as_deref())
+                .any(|u| overlaps(&u.dir, &path))
+                || all
+                    .root
+                    .as_deref()
+                    .is_some_and(|r| overlaps(Path::new(r), &path));
+            if pinned || foreign_workspace || in_use {
+                (None, true)
+            } else {
+                (Some(dir), false)
+            }
+        })
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))
     }
 
     /// 復元した場合に「バックアップに無い画像ファイル」になるものの数と容量。
@@ -461,6 +505,8 @@ impl BackupService {
             ));
         }
 
+        let drop_images_dir = req.include.settings && self.restorable_images_dir(&staged).await?.1;
+
         // 1. 画像(追加のみ。この段階の失敗・中止は、画像が増えるだけで現在のデータは壊れない)
         if req.include.gallery {
             let target = self.target_images_dir(&req.include, &staged).await?;
@@ -482,6 +528,14 @@ impl BackupService {
         self.db
             .call(move |c| restore::apply(c, &staged2, &include, restore_key))
             .await?;
+        if drop_images_dir {
+            self.db
+                .call(|c| {
+                    c.execute("DELETE FROM settings WHERE key = 'storage.images_dir'", [])?;
+                    Ok(())
+                })
+                .await?;
+        }
         self.sink.progress("swap", 1, 1);
 
         // 3. 復元後の DB が参照しない画像ファイルをゴミ箱へ(選んだときのみ)

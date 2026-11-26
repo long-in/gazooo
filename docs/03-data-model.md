@@ -225,3 +225,9 @@ CREATE INDEX idx_assistant_msg_conv ON assistant_messages(conversation_id, creat
 - インデックス: `idx_images_project(project_id, created_at DESC, id DESC)`、`idx_jobs_project(project_id)`。
 - `last_params_json`: そのプロジェクトで最後に投入した生成設定(`GenerationParams` の JSON。`job_enqueue` の成功時に Rust が更新)。
 - 物理ファイルは動かさない(03「ファイル配置」のまま)。詳細は [40-projects.md](40-projects.md) §3。
+
+## 追記(v0.53): 全体設定と個別設定のキー(52)
+
+- `app.db` の `device_settings`: 端末のキーに加え、上書きできる項目の全体の値、`storage.images_root`(全体の画像の保存先)、`storage.legacy_images_user`(以前の版の画像の場所を使うユーザー)。
+- ユーザーの `settings`: 個人の項目、個別設定の値と組の印(`override.*`)、`storage.images_dir`(個別の画像の保存先)、`scope.upgraded`。
+- 画像の場所: 個別の指定 → `<images_root>/<ユーザー ID>` → 以前の版の場所 → `users/<id>/images`。DB の相対パスは変わらない。スキーマの変更はない。

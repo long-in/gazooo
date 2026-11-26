@@ -530,6 +530,13 @@ impl ModelService {
         Ok(self.lock()?.iter().map(|e| e.state.clone()).collect())
     }
 
+    /// 実行中・待機中のダウンロードがあるか。
+    pub fn has_active_download(&self) -> bool {
+        self.lock()
+            .map(|e| e.iter().any(|e| e.state.status.is_active()))
+            .unwrap_or(true)
+    }
+
     /// 取得を中止する。`discard` で `.part`(途中のデータ)も削除する。
     pub fn cancel(&self, download_id: &str, discard: bool) -> AppResult<()> {
         let mut finished = None;

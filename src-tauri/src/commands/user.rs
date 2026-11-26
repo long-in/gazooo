@@ -26,6 +26,12 @@ pub async fn user_current(users: Users<'_>) -> AppResult<Option<UserSummary>> {
     users.current().await
 }
 
+/// 削除で一緒に消える、全体の保存先の中の画像フォルダ。
+#[tauri::command]
+pub async fn user_delete_preview(users: Users<'_>, id: String) -> AppResult<Option<String>> {
+    users.delete_preview(id).await
+}
+
 #[tauri::command]
 pub async fn user_create(users: Users<'_>, name: String, color: String) -> AppResult<UserSummary> {
     users.create(name, color).await
@@ -48,10 +54,13 @@ pub async fn user_login(
     let paths = app.state::<AppPaths>();
     let s = db.call(|c| settings::load(c)).await?;
     let dir = paths.resolve_images_dir(&s);
-    std::fs::create_dir_all(&dir)?;
-    app.asset_protocol_scope()
-        .allow_directory(&dir, true)
-        .map_err(|e| AppError::internal(e.to_string()))?;
+    // 保存先のドライブが外れていてもログインは続ける(全体の保存先だと全員が入れず、直せなくなるため)
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        tracing::warn!(error = %e, "image folder is not available");
+    }
+    if let Err(e) = app.asset_protocol_scope().allow_directory(&dir, true) {
+        tracing::warn!(error = %e, "failed to allow the image folder");
+    }
     // 前回の実行中ジョブを失敗扱いにしてから、そのユーザーの待機中ジョブを再開する
     if let Err(e) = jobs.recover().await {
         tracing::error!(error = %e, "job recovery failed");

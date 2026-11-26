@@ -43,6 +43,9 @@ export interface DeleteResult {
   externalImagesDir: string | null;
 }
 
+/** 削除で一緒に消える、全体の保存先の中の画像フォルダ(無ければ null)。 */
+export const userDeletePreview = (id: string) => invoke<string | null>("user_delete_preview", { id });
+
 export const userDelete = (
   id: string,
   opts: { secret?: string; confirmName?: string } = {},
