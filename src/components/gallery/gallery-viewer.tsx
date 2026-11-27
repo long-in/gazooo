@@ -235,10 +235,10 @@ export function GalleryViewer({
         aria-label={t("gallery.viewerStrip")}
         aria-orientation="horizontal"
         aria-activedescendant={`viewer-opt-${current.id}`}
-        className="shrink-0 overflow-x-auto overflow-y-hidden"
-        style={{ height: THUMB + 12 }}
+        className="shrink-0 overflow-x-auto overflow-y-hidden px-1"
       >
-        <div className="relative h-full" style={{ width: virtualizer.getTotalSize() }}>
+        {/* 高さは中身で決める。固定すると、横スクロールバーの分だけサムネイルが欠ける */}
+        <div className="relative" style={{ width: virtualizer.getTotalSize(), height: THUMB + 8 }}>
           {virtualItems.map((v) => {
             const img = items[v.index];
             if (!img) return null;

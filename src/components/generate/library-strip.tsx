@@ -424,7 +424,8 @@ export function LibraryStrip() {
             {filtered ? t("strip.noResults") : t("strip.empty")}
           </p>
         ) : (
-          <div ref={scrollRef} onScroll={onScroll} onKeyDown={onKeyDown} className="flex gap-2 overflow-x-auto pb-1" data-testid="strip-scroll">
+          // 選択の枠は要素の外側に描くため、四辺に余白を取る(スクロール領域は、はみ出しを切り取る)
+          <div ref={scrollRef} onScroll={onScroll} onKeyDown={onKeyDown} className="-mx-1 flex scroll-px-1 gap-2 overflow-x-auto p-1" data-testid="strip-scroll">
             {showCards &&
               cards.map((job) => (
                 <QueueCard
